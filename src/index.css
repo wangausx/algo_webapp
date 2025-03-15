@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Chrome-specific optimizations */
+@layer utilities {
+  .border-r-4 {
+    border-right-width: 4px;
+  }
+  .shadow-xl {
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 
+                0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* Force Chrome rendering enhancements */
+@media (-webkit-appearance: none) {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+html, body {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000;
+}
