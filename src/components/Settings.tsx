@@ -1,4 +1,3 @@
-import { Dispatch, SetStateAction } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import {
   Card,
@@ -21,7 +20,7 @@ export interface AccountConfig {
   balance: number; // Added balance to AccountConfig
 }
 
-export interface PortfolioEntry {
+export interface PositionEntry {
   ticker: string;
   share_amount: number;
 }
@@ -33,20 +32,21 @@ interface SettingsProps {
 
 const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig, setAccountConfig: setParentAccountConfig }) => {
   const [accountConfig, setAccountConfig] = React.useState<AccountConfig>(initialAccountConfig);
-  const [portfolio, setPortfolio] = React.useState<PortfolioEntry[]>([]);
+  const [position, setPosition] = React.useState<PositionEntry[]>([]);
   const [ticker, setTicker] = React.useState<string>('');
   const [tickerHistory, setTickerHistory] = React.useState<string[]>([]);
+  const [error, setError] = React.useState<string | null>(null);
 
   const {
     saveAccountSettings,
-    savePortfolio,
+    savePosition,
     addTicker,
     removeTicker
   } = useSettings({
     accountConfig,
     setAccountConfig,
-    portfolio,
-    setPortfolio,
+    position,
+    setPosition,
     ticker,
     setTicker,
     tickerHistory,
@@ -57,6 +57,18 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
     setParentAccountConfig(accountConfig);
   }, [accountConfig, setParentAccountConfig]);
 
+  // Modified savePosition handler with username validation
+  const handleSavePosition = () => {
+    if (!accountConfig.username || accountConfig.username.trim() === '') {
+      setError("Username is required. Please set it in Account Settings tab.");
+      return;
+    }
+    
+    setError(null);
+    // Call the hook's savePosition with the position data and username
+    savePosition({ username: accountConfig.username, position });
+  };
+
   return (
     <Card>
       <Tabs.Root defaultValue="account" className="w-full">
@@ -64,8 +76,8 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
           <Tabs.Trigger value="account" className="TabsTrigger">
             Account Settings
           </Tabs.Trigger>
-          <Tabs.Trigger value="portfolio" className="TabsTrigger">
-            Portfolio Setting
+          <Tabs.Trigger value="position" className="TabsTrigger">
+            Position Setting
           </Tabs.Trigger>
         </Tabs.List>
 
@@ -168,13 +180,18 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
           </CardContent>
         </Tabs.Content>
 
-        <Tabs.Content value="portfolio" className="TabsContent">
+        <Tabs.Content value="position" className="TabsContent">
           <CardHeader className="p-3 md:p-4">
-            <CardTitle className="text-sm md:text-base">Trading Portfolio</CardTitle>
+            <CardTitle className="text-sm md:text-base">Trading Position</CardTitle>
             <CardDescription className="text-xs md:text-sm">Manage your trading allocations</CardDescription>
           </CardHeader>
           <CardContent className="p-3 md:p-4">
             <div className="space-y-4">
+              {error && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded">
+                  {error}
+                </div>
+              )}
               <div className="space-y-1">
                 <label className="text-xs md:text-sm font-medium">Add Ticker (for Reversal Trading)</label>
                 <div className="flex gap-2">
@@ -199,18 +216,18 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
                   </button>
                 </div>
               </div>
-              {portfolio.length > 0 && (
+              {position.length > 0 && (
                 <div className="space-y-2">
                   <table className="w-full border-collapse">
                     <thead>
                       <tr>
                         <th className="border p-2 text-left">Ticker</th>
                         <th className="border p-2 text-left">Shares per Trade</th>
-                        <th className="border p-2 text-left">Action</th>
+                        <th className="border p-2 text-left"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {portfolio.map((entry, index) => (
+                      {position.map((entry, index) => (
                         <tr key={entry.ticker}>
                           <td className="border p-2">{entry.ticker}</td>
                           <td className="border p-2">
@@ -218,10 +235,10 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
                               type="number"
                               value={entry.share_amount === 0 ? '' : entry.share_amount}
                               onChange={(e) => {
-                                const newPortfolio = [...portfolio];
+                                const newPosition = [...position];
                                 const inputValue = e.target.value;
-                                newPortfolio[index].share_amount = inputValue === '' ? 0 : parseInt(inputValue) || 0;
-                                setPortfolio(newPortfolio);
+                                newPosition[index].share_amount = inputValue === '' ? 0 : parseInt(inputValue) || 0;
+                                setPosition(newPosition);
                               }}
                               className="w-full p-1 border rounded"
                               min="0"
@@ -244,10 +261,10 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
                 </div>
               )}
               <button
-                onClick={savePortfolio}
+                onClick={handleSavePosition}
                 className="w-full px-4 py-2 text-sm md:text-base bg-blue-500 text-white rounded-lg hover:bg-blue-600"
               >
-                Save Portfolio
+                Save Position
               </button>
             </div>
           </CardContent>

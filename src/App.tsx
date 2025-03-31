@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, Settings as SettingsIcon, MessageCircle, TrendingUp } from 'lucide-react';
-import TradingAssistant from './components/TradingAssistant';
+import Chatbot from './components/Chatbot';
 import Settings, { AccountConfig } from './components/Settings'; 
 import Dashboard from './components/Dashboard'; 
-import { useTradingAssistant } from './hooks/useTradingAssistant';
+import { useChatbot } from './hooks/useChatbot';
 import { useTrading } from './hooks/useTrading';
 
 const AlgoTradingApp: React.FC = () => {
@@ -11,7 +11,6 @@ const AlgoTradingApp: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState(null);
 
-  // Initialize custom hooks
   const {
     messages,
     userInput,
@@ -19,7 +18,7 @@ const AlgoTradingApp: React.FC = () => {
     handleSendMessage,
     startNewChat,
     isLoading
-  } = useTradingAssistant(currentConversationId);
+  } = useChatbot(currentConversationId);
 
   const initialAccountConfig = {
     apiKey: '',
@@ -37,24 +36,26 @@ const AlgoTradingApp: React.FC = () => {
     brokerageType: 'paper',
     modelType: 'intraday_reversal',
     riskLevel: 'moderate',
-    balance: 0  // Added the required balance property
+    balance: 0
   });
 
-  const { tradingStatus, positions, toggleTrading } = useTrading();
+  const { tradingStatus, positions, toggleTrading } = useTrading(accountConfig.username);
 
-  // Handle starting a new chat
   const handleNewChat = () => {
     setCurrentConversationId(null);
     startNewChat();
   };
 
-  
   return (
     <div className="flex flex-col md:flex-row h-screen bg-gray-100">
-      {/* Fixed Sidebar Navigation */}
       <div className="w-full md:w-64 bg-white shadow-lg flex md:block">
         <div className="p-4 flex items-center justify-between md:block">
-          <h1 className="text-lg md:text-xl font-bold text-gray-800">Quanti-trading</h1>
+          <div>
+            <h1 className="text-lg md:text-xl font-bold text-gray-800">Quant Auto-Trading</h1>
+            <p className="text-sm text-gray-600 mt-1">
+              {accountConfig.username.trim() === '' ? 'No account set yet' : accountConfig.username}
+            </p>
+          </div>
           <button className="md:hidden p-2" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
             <Menu className="w-5 h-5" />
           </button>
@@ -69,7 +70,6 @@ const AlgoTradingApp: React.FC = () => {
             <TrendingUp className="w-4 h-4 md:w-5 md:h-5 mr-2" />
             Dashboard
           </button>
-          {/* Added missing navigation buttons */}
           <button
             onClick={() => { setActiveTab('chat'); setMobileMenuOpen(false); }}
             className={`flex items-center w-full px-4 py-3 text-sm md:text-base ${
@@ -91,24 +91,24 @@ const AlgoTradingApp: React.FC = () => {
         </nav>
       </div>
 
-        <div className="flex-1 p-4 md:p-8 overflow-auto">
+      <div className="flex-1 p-4 md:p-8 overflow-auto">
         {activeTab === 'dashboard' && (
           <Dashboard 
             tradingStatus={tradingStatus}
             toggleTrading={toggleTrading}
-            positions={positions}
+            username={accountConfig.username} // Pass username prop here
           />
         )}
 
         {activeTab === 'chat' && (
-        <TradingAssistant
+          <Chatbot
             messages={messages}
             userInput={userInput}
             setUserInput={setUserInput}
             handleSendMessage={handleSendMessage}
-            handleNewChat={handleNewChat}  // Add this
-            isLoading={isLoading}         // Add this
-        />
+            handleNewChat={handleNewChat}
+            isLoading={isLoading}
+          />
         )}
 
         {activeTab === 'settings' && (
@@ -119,9 +119,7 @@ const AlgoTradingApp: React.FC = () => {
         )}
       </div>
     </div>
-    
   );
-  
 };
 
 export default AlgoTradingApp;

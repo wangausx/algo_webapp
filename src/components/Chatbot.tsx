@@ -17,7 +17,7 @@ interface Message {
   isError?: boolean;
 }
 
-interface TradingAssistantProps {
+interface ChatbotProps {
   messages: Message[];
   userInput: string;
   setUserInput: (input: string) => void;
@@ -26,7 +26,7 @@ interface TradingAssistantProps {
   isLoading: boolean;
 }
 
-const TradingAssistant: React.FC<TradingAssistantProps> = ({
+const Chatbot: React.FC<ChatbotProps> = ({
   messages,
   userInput,
   setUserInput,
@@ -181,4 +181,4 @@ const TradingAssistant: React.FC<TradingAssistantProps> = ({
   );
 };
 
-export default TradingAssistant;
+export default Chatbot;

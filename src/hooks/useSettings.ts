@@ -1,22 +1,27 @@
 import { useEffect } from 'react';
-import { AccountConfig, PortfolioEntry } from '../components/Settings';
+import { AccountConfig, PositionEntry } from '../components/Settings';
 
 interface UseSettingsProps {
   accountConfig: AccountConfig;
   setAccountConfig: React.Dispatch<React.SetStateAction<AccountConfig>>;
-  portfolio: PortfolioEntry[];
-  setPortfolio: React.Dispatch<React.SetStateAction<PortfolioEntry[]>>;
+  position: PositionEntry[];
+  setPosition: React.Dispatch<React.SetStateAction<PositionEntry[]>>;
   ticker: string;
   setTicker: React.Dispatch<React.SetStateAction<string>>;
   tickerHistory: string[];
   setTickerHistory: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
+interface SavePositionData {
+  username: string;
+  position: PositionEntry[];
+}
+
 export const useSettings = ({
   accountConfig,
   setAccountConfig,
-  portfolio,
-  setPortfolio,
+  position,
+  setPosition,
   ticker,
   setTicker,
   tickerHistory,
@@ -41,32 +46,33 @@ export const useSettings = ({
     }
   };
 
-  const savePortfolio = async () => {
+  const savePosition = async ({ username, position }: SavePositionData) => {
     try {
-      const updatedPortfolio = portfolio.map(entry => ({
+      const updatedPosition = position.map(entry => ({
         ticker: entry.ticker,
         share_amount: entry.share_amount,
       }));
-      const response = await fetch('/api/portfolio', {
+      const response = await fetch('/api/positions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          username: accountConfig.username,
-          portfolio: updatedPortfolio,
+          username,
+          position: updatedPosition,
         }),
       });
-      if (!response.ok) throw new Error('Failed to save portfolio');
-      console.log('Saving portfolio response: ', await response.json());
+      if (!response.ok) throw new Error('Failed to save position');
+      console.log('Saving position response: ', await response.json());
     } catch (error) {
-      console.error('Error saving portfolio:', error);
+      console.error('Error saving position:', error);
     }
   };
+  
 
   const addTicker = () => {
-    if (ticker && !portfolio.some(p => p.ticker === ticker)) {
-      setPortfolio([...portfolio, { ticker, share_amount: 0 }]);
+    if (ticker && !position.some(p => p.ticker === ticker)) {
+      setPosition([...position, { ticker, share_amount: 0 }]);
       if (!tickerHistory.includes(ticker)) {
         setTickerHistory([...tickerHistory, ticker]);
       }
@@ -75,7 +81,7 @@ export const useSettings = ({
   };
 
   const removeTicker = (tickerToRemove: string) => {
-    setPortfolio(portfolio.filter(entry => entry.ticker !== tickerToRemove));
+    setPosition(position.filter(entry => entry.ticker !== tickerToRemove));
   };
 
   useEffect(() => {
@@ -90,34 +96,34 @@ export const useSettings = ({
         console.log('Loaded account data:', accountData);
         if (accountData) setAccountConfig(prev => ({ ...prev, ...accountData }));
 
-        // Load portfolio
-        const portfolioRes = await fetch(`/api/portfolio/${accountConfig.username}`);
-        if (!portfolioRes.ok) throw new Error('Failed to fetch portfolio');
-        const portfolioData = await portfolioRes.json();
-        console.log('Loaded portfolio data:', portfolioData);
+        // Load position
+        const positionRes = await fetch(`/api/positions/${accountConfig.username}`);
+        if (!positionRes.ok) throw new Error('Failed to fetch position');
+        const positionData = await positionRes.json();
+        console.log('Loaded position data:', positionData);
 
-        const portfolioArray = (Array.isArray(portfolioData) ? portfolioData : portfolioData.portfolio || []).map(
+        const positionArray = (Array.isArray(positionData) ? positionData : positionData.position || []).map(
           (entry: any) => ({
             ticker: entry.ticker,
             share_amount: entry.share_amount,
           })
         );
-        console.log('Mapped portfolio array:', portfolioArray);
-        setPortfolio(portfolioArray);
+        console.log('Mapped position array:', positionArray);
+        setPosition(positionArray);
       } catch (error) {
         console.error('Error loading data:', error);
       }
     };
     loadData();
-  }, [accountConfig.username, setAccountConfig, setPortfolio]);
+  }, [accountConfig.username, setAccountConfig, setPosition]);
 
   useEffect(() => {
-    console.log('Current portfolio state:', portfolio);
-  }, [portfolio]);
+    console.log('Current position state:', position);
+  }, [position]);
 
   return {
     saveAccountSettings,
-    savePortfolio,
+    savePosition,
     addTicker,
     removeTicker
   };
