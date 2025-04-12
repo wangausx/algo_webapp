@@ -17,56 +17,73 @@ export interface AccountConfig {
   brokerageType: 'paper' | 'live';
   modelType: 'intraday_reversal' | 'trend_following';
   riskLevel: 'moderate' | 'conservative' | 'aggressive';
-  balance: number; // Added balance to AccountConfig
+  balance: number;
 }
 
-export interface PositionEntry {
-  ticker: string;
-  share_amount: number;
+export interface TradeSetting {
+  id: string;
+  paperBalance: number;
+  subscribedSymbols: string[];
+  riskSettings: {
+    maxPositionSize: number;
+    riskPercentage: number;
+    maxDailyLoss: number;
+  };
 }
 
 interface SettingsProps {
   accountConfig: AccountConfig;
   setAccountConfig: React.Dispatch<React.SetStateAction<AccountConfig>>;
+  setParentAccountConfig: React.Dispatch<React.SetStateAction<AccountConfig>>;
 }
 
-const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig, setAccountConfig: setParentAccountConfig }) => {
+// Predefined list of stock symbols
+const STOCK_SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA', 'NVDA', 'META', 'JPM', 'V', 'WMT'];
+
+const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig, setParentAccountConfig }) => {
   const [accountConfig, setAccountConfig] = React.useState<AccountConfig>(initialAccountConfig);
-  const [position, setPosition] = React.useState<PositionEntry[]>([]);
-  const [ticker, setTicker] = React.useState<string>('');
-  const [tickerHistory, setTickerHistory] = React.useState<string[]>([]);
+  const [tradeSetting, setTradeSetting] = React.useState<TradeSetting>({
+    id: initialAccountConfig.username,
+    paperBalance: initialAccountConfig.balance,
+    subscribedSymbols: [],
+    riskSettings: {
+      maxPositionSize: 1000,
+      riskPercentage: 2,
+      maxDailyLoss: 500,
+    },
+  });
+  
   const [error, setError] = React.useState<string | null>(null);
+  const [selectedSymbol, setSelectedSymbol] = React.useState("");
 
   const {
     saveAccountSettings,
-    savePosition,
-    addTicker,
-    removeTicker
+    saveTradeSetting,
+    addSymbol,
+    removeSymbol
   } = useSettings({
     accountConfig,
     setAccountConfig,
-    position,
-    setPosition,
-    ticker,
-    setTicker,
-    tickerHistory,
-    setTickerHistory
+    tradeSetting,
+    setTradeSetting
   });
 
+  // Sync accountConfig changes to parent and update tradeSetting.id
   React.useEffect(() => {
     setParentAccountConfig(accountConfig);
+    setTradeSetting(prev => ({ ...prev, id: accountConfig.username, paperBalance: accountConfig.balance }));
   }, [accountConfig, setParentAccountConfig]);
 
-  // Modified savePosition handler with username validation
-  const handleSavePosition = () => {
+  // Handle saving trade settings
+  const handleSaveTradeSettings = () => {
     if (!accountConfig.username || accountConfig.username.trim() === '') {
       setError("Username is required. Please set it in Account Settings tab.");
       return;
     }
     
     setError(null);
-    // Call the hook's savePosition with the position data and username
-    savePosition({ username: accountConfig.username, position });
+    saveTradeSetting({ username: accountConfig.username, tradeSetting });
+    console.log("Saving trade settings:", tradeSetting);
   };
 
   return (
@@ -76,15 +93,15 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
           <Tabs.Trigger value="account" className="TabsTrigger">
             Account Settings
           </Tabs.Trigger>
-          <Tabs.Trigger value="position" className="TabsTrigger">
-            Position Setting
+          <Tabs.Trigger value="trade" className="TabsTrigger">
+            Trade Settings
           </Tabs.Trigger>
         </Tabs.List>
 
         <Tabs.Content value="account" className="TabsContent">
           <CardHeader className="p-3 md:p-4">
             <CardTitle className="text-sm md:text-base">Account Settings</CardTitle>
-            <CardDescription className="text-xs md:text-sm">Configure your trading parameters</CardDescription>
+            <CardDescription className="text-xs md:text-sm">Configure your account parameters</CardDescription>
           </CardHeader>
           <CardContent className="p-3 md:p-4">
             <form className="space-y-3 md:space-y-4 grid md:grid-cols-2 gap-4" onSubmit={saveAccountSettings}>
@@ -155,21 +172,7 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
                   <option value="trend_following">Trend Following</option>
                 </select>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs md:text-sm font-medium">Risk Level</label>
-                <select
-                  value={accountConfig.riskLevel}
-                  onChange={(e) => setAccountConfig(prev => ({
-                    ...prev,
-                    riskLevel: e.target.value as AccountConfig["riskLevel"]
-                  }))}
-                  className="w-full p-2 text-sm md:text-base border rounded-lg"
-                >
-                  <option value="moderate">Moderate</option>
-                  <option value="conservative">Conservative</option>
-                  <option value="aggressive">Aggressive</option>
-                </select>
-              </div>
+
               <button
                 type="submit"
                 className="md:col-span-2 w-full px-4 py-2 text-sm md:text-base bg-blue-500 text-white rounded-lg hover:bg-blue-600"
@@ -180,10 +183,10 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
           </CardContent>
         </Tabs.Content>
 
-        <Tabs.Content value="position" className="TabsContent">
+        <Tabs.Content value="trade" className="TabsContent">
           <CardHeader className="p-3 md:p-4">
-            <CardTitle className="text-sm md:text-base">Trading Position</CardTitle>
-            <CardDescription className="text-xs md:text-sm">Manage your trading allocations</CardDescription>
+            <CardTitle className="text-sm md:text-base">Trade Settings</CardTitle>
+            <CardDescription className="text-xs md:text-sm">Configure your trading preferences and risk settings</CardDescription>
           </CardHeader>
           <CardContent className="p-3 md:p-4">
             <div className="space-y-4">
@@ -193,78 +196,92 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
                 </div>
               )}
               <div className="space-y-1">
-                <label className="text-xs md:text-sm font-medium">Add Ticker (for Reversal Trading)</label>
+                <label className="text-xs md:text-sm font-medium">Subscribing Symbols</label>
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={ticker}
-                    onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                  <select
+                    value={selectedSymbol}
+                    onChange={(e) => {
+                      const symbol = e.target.value;
+                      if (symbol) {
+                        addSymbol(symbol);
+                        setSelectedSymbol(""); // Reset after adding
+                      }
+                    }}
                     className="w-full p-2 text-sm md:text-base border rounded-lg"
-                    list="tickerHistory"
-                    placeholder="Enter ticker (e.g., AAPL)"
-                  />
-                  <datalist id="tickerHistory">
-                    {tickerHistory.map((t) => (
-                      <option key={t} value={t} />
-                    ))}
-                  </datalist>
-                  <button
-                    onClick={addTicker}
-                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
                   >
-                    Add
-                  </button>
+                    <option value="" disabled>Select a symbol</option>
+                    {STOCK_SYMBOLS.filter(symbol => !tradeSetting.subscribedSymbols.includes(symbol)).map(symbol => (
+                      <option key={symbol} value={symbol}>{symbol}</option>
+                    ))}
+                  </select>
+                </div>
+                {tradeSetting.subscribedSymbols.length > 0 && (
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {tradeSetting.subscribedSymbols.map(symbol => (
+                      <div key={symbol} className="flex items-center justify-between p-2 border-b">
+                        <span>{symbol}</span>
+                        <button
+                          onClick={() => removeSymbol(symbol)}
+                          className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs md:text-sm font-medium">Risk Settings</label>
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs md:text-sm">Max Position Size ($)</label>
+                    <input
+                      type="number"
+                      value={tradeSetting.riskSettings.maxPositionSize}
+                      onChange={(e) => setTradeSetting(prev => ({
+                        ...prev,
+                        riskSettings: { ...prev.riskSettings, maxPositionSize: parseFloat(e.target.value) || 0 },
+                      }))}
+                      className="w-full p-2 text-sm md:text-base border rounded-lg"
+                      min="0"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs md:text-sm">Risk Percentage (%)</label>
+                    <input
+                      type="number"
+                      value={tradeSetting.riskSettings.riskPercentage}
+                      onChange={(e) => setTradeSetting(prev => ({
+                        ...prev,
+                        riskSettings: { ...prev.riskSettings, riskPercentage: parseFloat(e.target.value) || 0 },
+                      }))}
+                      className="w-full p-2 text-sm md:text-base border rounded-lg"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs md:text-sm">Max Daily Loss ($)</label>
+                    <input
+                      type="number"
+                      value={tradeSetting.riskSettings.maxDailyLoss}
+                      onChange={(e) => setTradeSetting(prev => ({
+                        ...prev,
+                        riskSettings: { ...prev.riskSettings, maxDailyLoss: parseFloat(e.target.value) || 0 },
+                      }))}
+                      className="w-full p-2 text-sm md:text-base border rounded-lg"
+                      min="0"
+                    />
+                  </div>
                 </div>
               </div>
-              {position.length > 0 && (
-                <div className="space-y-2">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr>
-                        <th className="border p-2 text-left">Ticker</th>
-                        <th className="border p-2 text-left">Shares per Trade</th>
-                        <th className="border p-2 text-left"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {position.map((entry, index) => (
-                        <tr key={entry.ticker}>
-                          <td className="border p-2">{entry.ticker}</td>
-                          <td className="border p-2">
-                            <input
-                              type="number"
-                              value={entry.share_amount === 0 ? '' : entry.share_amount}
-                              onChange={(e) => {
-                                const newPosition = [...position];
-                                const inputValue = e.target.value;
-                                newPosition[index].share_amount = inputValue === '' ? 0 : parseInt(inputValue) || 0;
-                                setPosition(newPosition);
-                              }}
-                              className="w-full p-1 border rounded"
-                              min="0"
-                              step="1"
-                              placeholder="0"
-                            />
-                          </td>
-                          <td className="border p-2">
-                            <button
-                              onClick={() => removeTicker(entry.ticker)}
-                              className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                            >
-                              Remove
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
               <button
-                onClick={handleSavePosition}
+                onClick={handleSaveTradeSettings}
                 className="w-full px-4 py-2 text-sm md:text-base bg-blue-500 text-white rounded-lg hover:bg-blue-600"
               >
-                Save Position
+                Save Trade Settings
               </button>
             </div>
           </CardContent>

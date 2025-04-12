@@ -1,31 +1,27 @@
 import { useEffect } from 'react';
-import { AccountConfig, PositionEntry } from '../components/Settings';
+import { AccountConfig, TradeSetting } from '../components/Settings';
 
 interface UseSettingsProps {
   accountConfig: AccountConfig;
   setAccountConfig: React.Dispatch<React.SetStateAction<AccountConfig>>;
-  position: PositionEntry[];
-  setPosition: React.Dispatch<React.SetStateAction<PositionEntry[]>>;
-  ticker: string;
-  setTicker: React.Dispatch<React.SetStateAction<string>>;
-  tickerHistory: string[];
-  setTickerHistory: React.Dispatch<React.SetStateAction<string[]>>;
+  tradeSetting: TradeSetting;
+  setTradeSetting: React.Dispatch<React.SetStateAction<TradeSetting>>;
+  //symbol: string;
+  //setSymbol: React.Dispatch<React.SetStateAction<string>>;
+  //tickerHistory: string[];
+  //setTickerHistory: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
-interface SavePositionData {
+interface TradeSettingData {
   username: string;
-  position: PositionEntry[];
+  tradeSetting: TradeSetting;
 }
 
 export const useSettings = ({
   accountConfig,
   setAccountConfig,
-  position,
-  setPosition,
-  ticker,
-  setTicker,
-  tickerHistory,
-  setTickerHistory
+  tradeSetting,
+  setTradeSetting
 }: UseSettingsProps) => {
   const saveAccountSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,42 +42,54 @@ export const useSettings = ({
     }
   };
 
-  const savePosition = async ({ username, position }: SavePositionData) => {
+  const saveTradeSetting = async ({ username, tradeSetting }: TradeSettingData) => {
+    if (!username) throw new Error('Username is required');
+    if (!tradeSetting?.paperBalance || !tradeSetting?.subscribedSymbols || !tradeSetting?.riskSettings) {
+      throw new Error('Invalid trade setting data');
+    }
     try {
-      const updatedPosition = position.map(entry => ({
-        ticker: entry.ticker,
-        share_amount: entry.share_amount,
-      }));
-      const response = await fetch('/api/positions', {
+      const response = await fetch('/api/tradesetting', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           username,
-          position: updatedPosition,
+          tradeSetting: tradeSetting,
         }),
       });
-      if (!response.ok) throw new Error('Failed to save position');
-      console.log('Saving position response: ', await response.json());
-    } catch (error) {
-      console.error('Error saving position:', error);
-    }
-  };
-  
-
-  const addTicker = () => {
-    if (ticker && !position.some(p => p.ticker === ticker)) {
-      setPosition([...position, { ticker, share_amount: 0 }]);
-      if (!tickerHistory.includes(ticker)) {
-        setTickerHistory([...tickerHistory, ticker]);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save tradeSetting');
       }
-      setTicker('');
+      
+      const data = await response.json();
+      console.log('Saving tradeSetting response: ', data);
+      setTradeSetting(data); // Update local state with server response
+      return data;
+    } catch (error) {
+      console.error('Error saving tradeSetting:', error);
+      throw error; // Let the caller handle the error
     }
   };
 
-  const removeTicker = (tickerToRemove: string) => {
-    setPosition(position.filter(entry => entry.ticker !== tickerToRemove));
+  // Handle adding a symbol
+  const addSymbol = (symbol: string) => {
+    if (symbol && !tradeSetting.subscribedSymbols.includes(symbol)) {
+      setTradeSetting(prev => ({
+        ...prev,
+        subscribedSymbols: [...prev.subscribedSymbols, symbol],
+      }));
+    }
+  };
+
+  // Handle removing a symbol
+  const removeSymbol = (symbol: string) => {
+    setTradeSetting(prev => ({
+      ...prev,
+      subscribedSymbols: prev.subscribedSymbols.filter(s => s !== symbol),
+    }));
   };
 
   useEffect(() => {
@@ -94,37 +102,30 @@ export const useSettings = ({
         if (!accountRes.ok) throw new Error('Failed to fetch account settings');
         const accountData = await accountRes.json();
         console.log('Loaded account data:', accountData);
-        if (accountData) setAccountConfig(prev => ({ ...prev, ...accountData }));
+        if (accountData) setAccountConfig((prev) => ({ ...prev, ...accountData }));
 
-        // Load position
-        const positionRes = await fetch(`/api/positions/${accountConfig.username}`);
-        if (!positionRes.ok) throw new Error('Failed to fetch position');
-        const positionData = await positionRes.json();
-        console.log('Loaded position data:', positionData);
+        // Load tradeSetting
+        const trade_setting = await fetch(`/api/tradesetting/${accountConfig.username}`);
+        if (!trade_setting.ok) throw new Error('Failed to fetch tradeSetting');
+        const tradesetting_data = await trade_setting.json();
+        console.log('Loaded tradeSetting data:', tradesetting_data);
 
-        const positionArray = (Array.isArray(positionData) ? positionData : positionData.position || []).map(
-          (entry: any) => ({
-            ticker: entry.ticker,
-            share_amount: entry.share_amount,
-          })
-        );
-        console.log('Mapped position array:', positionArray);
-        setPosition(positionArray);
+        setTradeSetting(tradesetting_data);
       } catch (error) {
         console.error('Error loading data:', error);
       }
     };
     loadData();
-  }, [accountConfig.username, setAccountConfig, setPosition]);
+  }, [accountConfig.username, setAccountConfig, setTradeSetting]);
 
   useEffect(() => {
-    console.log('Current position state:', position);
-  }, [position]);
+    console.log('Current tradeSetting state:', tradeSetting);
+  }, [tradeSetting]);
 
   return {
     saveAccountSettings,
-    savePosition,
-    addTicker,
-    removeTicker
+    saveTradeSetting,
+    addSymbol,
+    removeSymbol,
   };
 };

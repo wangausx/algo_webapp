@@ -20,15 +20,6 @@ const AlgoTradingApp: React.FC = () => {
     isLoading
   } = useChatbot(currentConversationId);
 
-  const initialAccountConfig = {
-    apiKey: '',
-    secretKey: '',
-    brokerageType: 'paper' as const,
-    modelType: 'intraday_reversal' as const,
-    riskLevel: 'moderate' as const,
-    username: ''
-  };
-
   const [accountConfig, setAccountConfig] = useState<AccountConfig>({
     username: 'wangausx',
     apiKey: '',
@@ -39,7 +30,7 @@ const AlgoTradingApp: React.FC = () => {
     balance: 0
   });
 
-  const { tradingStatus, positions, toggleTrading } = useTrading(accountConfig.username);
+  const { tradingStatus, toggleTrading } = useTrading(accountConfig.username);
 
   const handleNewChat = () => {
     setCurrentConversationId(null);
@@ -86,7 +77,7 @@ const AlgoTradingApp: React.FC = () => {
             }`}
           >
             <SettingsIcon className="w-4 h-4 md:w-5 md:h-5 mr-2" />
-            Settings
+            Configuration
           </button>
         </nav>
       </div>
@@ -115,6 +106,7 @@ const AlgoTradingApp: React.FC = () => {
           <Settings
             accountConfig={accountConfig}
             setAccountConfig={setAccountConfig}
+            setParentAccountConfig={setAccountConfig}
           />
         )}
       </div>
