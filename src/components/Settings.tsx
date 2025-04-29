@@ -21,14 +21,14 @@ export interface AccountConfig {
 }
 
 export interface TradeSetting {
-  id: string;
-  paperBalance: number;
+  user_id: string;
   subscribedSymbols: string[];
   riskSettings: {
     maxPositionSize: number;
     riskPercentage: number;
     maxDailyLoss: number;
   };
+  isOption: 'yes' | 'no'
 }
 
 interface SettingsProps {
@@ -43,14 +43,14 @@ const STOCK_SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA', 'NVDA', 'META', 
 const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig, setParentAccountConfig }) => {
   const [accountConfig, setAccountConfig] = React.useState<AccountConfig>(initialAccountConfig);
   const [tradeSetting, setTradeSetting] = React.useState<TradeSetting>({
-    id: initialAccountConfig.username,
-    paperBalance: initialAccountConfig.balance,
+    user_id: initialAccountConfig.username,
     subscribedSymbols: [],
     riskSettings: {
       maxPositionSize: 1000,
       riskPercentage: 2,
       maxDailyLoss: 500,
     },
+    isOption: 'yes'
   });
   
   const [error, setError] = React.useState<string | null>(null);
@@ -68,10 +68,10 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
     setTradeSetting
   });
 
-  // Sync accountConfig changes to parent and update tradeSetting.id
+  // Sync accountConfig changes to parent and update tradeSetting.user_id
   React.useEffect(() => {
     setParentAccountConfig(accountConfig);
-    setTradeSetting(prev => ({ ...prev, id: accountConfig.username, paperBalance: accountConfig.balance }));
+    setTradeSetting(prev => ({ ...prev, user_id: accountConfig.username}));
   }, [accountConfig, setParentAccountConfig]);
 
   // Handle saving trade settings
@@ -80,9 +80,8 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
       setError("Username is required. Please set it in Account Settings tab.");
       return;
     }
-    
     setError(null);
-    saveTradeSetting({ username: accountConfig.username, tradeSetting });
+    saveTradeSetting(tradeSetting);
     console.log("Saving trade settings:", tradeSetting);
   };
 
@@ -233,7 +232,24 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
               </div>
               <div className="space-y-2">
                 <label className="text-xs md:text-sm font-medium">Risk Settings</label>
-                <div className="grid md:grid-cols-3 gap-4">
+                <div className="grid md:grid-cols-4 gap-4">
+                  {/* Trading Type (isOption) */}
+                  <div className="space-y-1">
+                    <label className="text-xs md:text-sm">Trading Type</label>
+                    <select
+                      value={tradeSetting.isOption}
+                      onChange={(e) => setTradeSetting(prev => ({
+                        ...prev,
+                        isOption: e.target.value as 'yes' | 'no',
+                      }))}
+                      className="w-full p-2 text-sm md:text-base border rounded-lg"
+                    >
+                      <option value="yes">Options</option>
+                      <option value="no">Stocks</option>
+                    </select>
+                  </div>
+
+                  {/* Max Position Size */}
                   <div className="space-y-1">
                     <label className="text-xs md:text-sm">Max Position Size ($)</label>
                     <input
@@ -247,6 +263,8 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
                       min="0"
                     />
                   </div>
+
+                  {/* Risk Percentage */}
                   <div className="space-y-1">
                     <label className="text-xs md:text-sm">Risk Percentage (%)</label>
                     <input
@@ -262,6 +280,8 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
                       step="0.1"
                     />
                   </div>
+
+                  {/* Max Daily Loss */}
                   <div className="space-y-1">
                     <label className="text-xs md:text-sm">Max Daily Loss ($)</label>
                     <input
@@ -276,6 +296,7 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
                     />
                   </div>
                 </div>
+
               </div>
               <button
                 onClick={handleSaveTradeSettings}

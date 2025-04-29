@@ -12,11 +12,6 @@ interface UseSettingsProps {
   //setTickerHistory: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
-interface TradeSettingData {
-  username: string;
-  tradeSetting: TradeSetting;
-}
-
 export const useSettings = ({
   accountConfig,
   setAccountConfig,
@@ -42,38 +37,32 @@ export const useSettings = ({
     }
   };
 
-  const saveTradeSetting = async ({ username, tradeSetting }: TradeSettingData) => {
-    if (!username) throw new Error('Username is required');
-    if (!tradeSetting?.paperBalance || !tradeSetting?.subscribedSymbols || !tradeSetting?.riskSettings) {
+  const saveTradeSetting = async (tradeSetting: TradeSetting) => { 
+    if (!tradeSetting?.user_id) throw new Error('Username is required');
+    if (!Array.isArray(tradeSetting.subscribedSymbols) || typeof tradeSetting.riskSettings !== 'object') {
       throw new Error('Invalid trade setting data');
     }
+  
     try {
       const response = await fetch('/api/tradesetting', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          username,
-          tradeSetting: tradeSetting,
-        }),
+        body: JSON.stringify(tradeSetting), // send with `tradeSetting` key
       });
-      
+  
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to save tradeSetting');
       }
-      
-      const data = await response.json();
-      console.log('Saving tradeSetting response: ', data);
-      setTradeSetting(data); // Update local state with server response
-      return data;
+  
+      alert('Trade settings saved successfully');
     } catch (error) {
       console.error('Error saving tradeSetting:', error);
-      throw error; // Let the caller handle the error
+      throw error; // Let caller handle error
     }
   };
-
   // Handle adding a symbol
   const addSymbol = (symbol: string) => {
     if (symbol && !tradeSetting.subscribedSymbols.includes(symbol)) {
