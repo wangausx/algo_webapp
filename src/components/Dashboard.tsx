@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
+import { useWebSocket } from '../hooks/useWebSocket';
 
-// The new interface matching the DB structure
 interface OpenPositionInstance {
-  userId: string;
   symbol: string;
-  strategyId?: string;
+  side: 'long' | 'short';
+  quantity: number;
+  entryPrice: number;
+  currentPrice: number | null;
+  unrealizedPl: number;
   entryTimestamp: Date;
-  isOption?: boolean;
-  // Keeping some fields from the old interface for display purposes
-  share_amount?: number;
-  entry_price?: number;
-  currentPrice?: number | null;
+  strategyId?: string;
 }
 
 interface DashboardProps {
@@ -24,35 +22,22 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, username = '' }) => {
   const [accountBalance, setAccountBalance] = useState(10000);
   const [positions, setPositions] = useState<OpenPositionInstance[]>([]);
-  const [tradingHistory, setTradingHistory] = useState<OpenPositionInstance[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
-  // Function to fetch current price from Yahoo Finance
-  const fetchCurrentPrice = async (symbol: string): Promise<number | null> => {
-    try {
-      const response = await fetch(`/api/stock-price?ticker=${symbol}`);
-      const data = await response.json();
-      console.log(`Response for ${symbol}:`, data); 
-      const price = data.price;
-      return price || null;
-    } catch (error) {
-      console.error(`Error fetching price for ${symbol}:`, error);
-      return null;
-    }
-  };
-
-  // Function to update current prices for all positions
-  const updatePrices = async (currentPositions: OpenPositionInstance[]) => {
-    const updatedPositions = await Promise.all(
-      currentPositions.map(async (pos) => {
-        const currentPrice = await fetchCurrentPrice(pos.symbol);
-        return { ...pos, currentPrice };
-      })
-    );
-    setPositions(updatedPositions);
-  };
+  useWebSocket(username, (positionUpdate) => {
+    setPositions((prev) => {
+      const updated = prev.filter((p) => p.symbol !== positionUpdate.symbol);
+      return [
+        ...updated,
+        {
+          ...positionUpdate,
+          entryTimestamp: new Date(positionUpdate.entryTimestamp),
+        } as OpenPositionInstance,
+      ];
+    });
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -73,53 +58,51 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
         const accountData = await accountRes.json();
         setAccountBalance(accountData.balance || 0);
 
-        // Fetch initial positions with new interface
+        // Fetch initial positions
         const positionRes = await fetch(`/api/positions/${username}`);
-        let positionArray = [];
-        
         if (positionRes.ok) {
           const positionData = await positionRes.json();
-          console.log('positionData refreshed.');
-          positionArray = (Array.isArray(positionData) 
-            ? positionData 
+          const positionArray = (Array.isArray(positionData)
+            ? positionData
             : positionData.positions || []
           ).map((entry: any) => ({
-            userId: entry.userId,
             symbol: entry.symbol,
-            strategyId: entry.strategyId,
+            side: entry.side,
+            quantity: entry.share_amount,
+            entryPrice: entry.entry_price,
+            currentPrice: entry.currentPrice ?? null,
+            unrealizedPl: entry.unrealizedPl ?? 0,
             entryTimestamp: new Date(entry.entryTimestamp),
-            isOption: entry.isOption || false,
-            // Additional fields for display
-            share_amount: entry.share_amount,
-            entry_price: entry.entry_price,
-            currentPrice: null,
+            strategyId: entry.strategyId,
           }));
+          setPositions(positionArray);
         } else {
           console.log('No open positions yet!');
         }
-
-        // Set positions and update prices if there are any
-        setPositions(positionArray);
-        if (positionArray.length > 0) {
-          await updatePrices(positionArray);
-        }
-
-        // Fetch trading history
-        const historyRes = await fetch(`/api/trade-history/${username}`);
-        const historyData = historyRes.ok ? await historyRes.json() : {};
-        const historyArray = (Array.isArray(historyData)
-          ? historyData
-          : historyData.history || []
-        ).map((entry: any) => ({
-          userId: entry.userId,
-          symbol: entry.symbol,
-          strategyId: entry.strategyId,
-          entryTimestamp: new Date(entry.entryTimestamp),
-          isOption: entry.isOption || false,
-          share_amount: entry.share_amount,
-          entry_price: entry.entry_price,
+      // Fetch orders
+      const ordersRes = await fetch(`/api/orders/${username}`);
+      if (ordersRes.ok) {
+        const ordersData = await ordersRes.json();
+        const ordersArray = (Array.isArray(ordersData)
+          ? ordersData
+          : ordersData.orders || []
+        ).map((order: any) => ({
+          symbol: order.symbol,
+          orderType: order.order_type,
+          side: order.side,
+          quantity: order.quantity,
+          filledQty: order.filled_quantity,
+          avgFillPrice: order.avg_fill_price,
+          status: order.status,
+          submittedAt: new Date(order.submitted_at),
+          filledAt: order.filled_at ? new Date(order.filled_at) : null,
+          expiresAt: order.expires_at ? new Date(order.expires_at) : null,
         }));
-        setTradingHistory(historyArray);
+        setOrders(ordersArray);
+      } else {
+        console.log('No orders found.');
+      }
+
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         setError(error instanceof Error ? error.message : 'An unknown error occurred');
@@ -129,29 +112,16 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
     };
 
     fetchData();
-
-    // Set up polling for current prices every 20 seconds
-    const intervalId = setInterval(() => {
-      if (positions.length > 0) {
-        updatePrices(positions);
-      }
-    }, 20000);
-
-    // Cleanup interval on unmount
-    return () => clearInterval(intervalId);
-
   }, [username]);
 
-  const totalPL = 0;
+  const totalPL = positions.reduce((acc, pos) => acc + pos.unrealizedPl, 0);
   const currentBalance = accountBalance + totalPL;
 
   if (!username) {
     return <div>Your trading account is not configured yet! Please set your account and manage your trading allocations under Settings.</div>;
   }
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
+  if (isLoading) return <div>Loading...</div>;
 
   if (error) {
     return (
@@ -164,47 +134,9 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
     );
   }
 
-  const TradingHistoryContent = () => (
-    <div className="max-h-[60vh] overflow-y-auto">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="text-xs md:text-sm bg-gray-50 sticky top-0">
-            <tr>
-              <th className="p-2 text-left">Symbol</th>
-              <th className="p-2 text-left">Position</th>
-              <th className="p-2 text-left">Entry Time</th>
-              <th className="p-2 text-left">Strategy</th>
-              <th className="p-2 text-left">Option</th>
-              <th className="p-2 text-left">Entry Price</th>
-            </tr>
-          </thead>
-          <tbody className="text-xs md:text-sm">
-            {tradingHistory.map((entry, index) => (
-              <tr key={index} className="border-t">
-                <td className="p-2">{entry.symbol}</td>
-                <td className="p-2">{entry.share_amount || '-'}</td>
-                <td className="p-2">{entry.entryTimestamp.toLocaleString()}</td>
-                <td className="p-2">{entry.strategyId || '-'}</td>
-                <td className="p-2">{entry.isOption ? 'Option' : 'Stock'}</td>
-                <td className="p-2">{entry.entry_price || '-'}</td>
-              </tr>
-            ))}
-            {tradingHistory.length === 0 && (
-              <tr>
-                <td colSpan={6} className="p-2 text-center text-gray-500">
-                  No trading history
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
   return (
     <div className="space-y-4 md:space-y-6">
-      {/* Existing Cards for Trading Status, Account Balance, Today's P/L */}
+      {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
         <Card className="w-full">
           <CardHeader className="p-3 md:p-4">
@@ -250,17 +182,17 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
             <CardTitle className="text-sm md:text-base">Today's P/L</CardTitle>
           </CardHeader>
           <CardContent className="p-3 md:p-4">
-            <div className="text-xl md:text-2xl font-bold text-gray-500">
-              $0.00
+            <div className="text-xl md:text-2xl font-bold text-gray-700">
+              ${totalPL.toFixed(2)}
             </div>
             <div className="text-xs md:text-sm text-gray-500">
-              0.0% ROI
+              {accountBalance > 0 ? ((totalPL / accountBalance) * 100).toFixed(2) : '0.00'}% ROI
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Open Positions Table */}
+      {/* Positions Table */}
       <Card className="max-h-[40vh] overflow-y-auto">
         <CardHeader className="p-3 md:p-4 sticky top-0 bg-white z-10">
           <CardTitle className="text-sm md:text-base">Open Positions</CardTitle>
@@ -270,54 +202,77 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
             <table className="w-full">
               <thead className="text-xs md:text-sm bg-gray-50">
                 <tr>
-                  <th className="p-4 text-left">Symbol</th>
-                  <th className="p-2 text-left">Position</th>
+                  <th className="p-2 text-left">Symbol</th>
+                  <th className="p-2 text-left">Side</th>
+                  <th className="p-2 text-left">Qty</th>
+                  <th className="p-2 text-left">Entry Price</th>
+                  <th className="p-2 text-left">Current Price</th>
+                  <th className="p-2 text-left">Unrealized P/L</th>
                   <th className="p-2 text-left">Entry Time</th>
                   <th className="p-2 text-left">Strategy</th>
-                  <th className="p-2 text-left">Option</th>
-                  <th className="p-2 text-left">Current Price</th>
                 </tr>
               </thead>
-              <tbody className="text-xs md:text-sm">
+              <tbody>
                 {positions.map((entry, index) => (
                   <tr key={index} className="border-t">
                     <td className="p-2">{entry.symbol}</td>
-                    <td className="p-2">{entry.share_amount || '-'}</td>
+                    <td className="p-2 capitalize">{entry.side}</td>
+                    <td className="p-2">{entry.quantity}</td>
+                    <td className="p-2">${entry.entryPrice.toFixed(2)}</td>
+                    <td className="p-2">${(entry.currentPrice ?? 0).toFixed(2)}</td>
+                    <td className="p-2">${entry.unrealizedPl.toFixed(2)}</td>
                     <td className="p-2">{entry.entryTimestamp.toLocaleString()}</td>
-                    <td className="p-2">{entry.strategyId || '-'}</td>
-                    <td className="p-2">{entry.isOption ? 'Option' : 'Stock'}</td>
-                    <td className="p-2">{entry.currentPrice ?? '-'}</td>
+                    <td className="p-2">{entry.strategyId ?? '-'}</td>
                   </tr>
                 ))}
-                {positions.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="p-2 text-center text-gray-500">
-                      No open positions yet!
-                    </td>
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+      {/* Orders Table */}
+      <Card className="mt-6 max-h-[40vh] overflow-y-auto">
+        <CardHeader className="p-3 md:p-4 sticky top-0 bg-white z-10">
+          <CardTitle className="text-sm md:text-base">Recent Orders</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="text-xs md:text-sm bg-gray-50">
+                <tr>
+                  <th className="p-2 text-left">Symbol</th>
+                  <th className="p-2 text-left">Type</th>
+                  <th className="p-2 text-left">Side</th>
+                  <th className="p-2 text-left">Qty</th>
+                  <th className="p-2 text-left">Filled Qty</th>
+                  <th className="p-2 text-left">Avg. Fill Price</th>
+                  <th className="p-2 text-left">Status</th>
+                  {/*<th className="p-2 text-left">Submitted At</th> */}
+                  <th className="p-2 text-left">Filled At</th>
+                  <th className="p-2 text-left">Expires At</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map((order, index) => (
+                  <tr key={index} className="border-t">
+                    <td className="p-2">{order.symbol}</td>
+                    <td className="p-2 capitalize">{order.orderType}</td>
+                    <td className="p-2 capitalize">{order.side}</td>
+                    <td className="p-2">{order.quantity}</td>
+                    <td className="p-2">{order.filledQty}</td>
+                    <td className="p-2">${order.avgFillPrice?.toFixed(2) ?? '-'}</td>
+                    <td className="p-2">{order.status}</td>
+                    <td className="p-2">{order.submittedAt.toLocaleString()}</td>
+                    <td className="p-2">{order.filledAt ? order.filledAt.toLocaleString() : '-'}</td>
+                    <td className="p-2">{order.expiresAt ? order.expiresAt.toLocaleString() : '-'}</td>
                   </tr>
-                )}
+                ))}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
 
-      {/* Trading History Button */}
-      <div className="flex justify-end p-4">
-        <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-          <DialogTrigger asChild>
-            <button className="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
-              Trading History
-            </button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
-              <DialogTitle>Trading History</DialogTitle>
-            </DialogHeader>
-            <TradingHistoryContent />
-          </DialogContent>
-        </Dialog>
-      </div>
     </div>
   );
 };

@@ -20,15 +20,24 @@ export interface AccountConfig {
   balance: number;
 }
 
+interface SymbolConfig {
+  symbol: string;
+  isOption: 'yes' | 'no';
+  optionDetails?: {
+    strike: number;
+    expiration: string; // e.g., '2025-04-18'
+    type: 'call' | 'put';
+  };
+}
+
 export interface TradeSetting {
   user_id: string;
-  subscribedSymbols: string[];
+  subscribedSymbols: SymbolConfig[];
   riskSettings: {
     maxPositionSize: number;
     riskPercentage: number;
     maxDailyLoss: number;
   };
-  isOption: 'yes' | 'no'
 }
 
 interface SettingsProps {
@@ -49,18 +58,23 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
       maxPositionSize: 1000,
       riskPercentage: 2,
       maxDailyLoss: 500,
-    },
-    isOption: 'yes'
+    }
   });
   
   const [error, setError] = React.useState<string | null>(null);
   const [selectedSymbol, setSelectedSymbol] = React.useState("");
+  const [isOptionSelected, setIsOptionSelected] = React.useState<'yes' | 'no'>('no');
+  const [optionStrike, setOptionStrike] = React.useState<number>(0);
+  const [optionExpiration, setOptionExpiration] = React.useState<string>("");
+  const [optionType, setOptionType] = React.useState<'call' | 'put'>('call');
+  const [showSymbolForm, setShowSymbolForm] = React.useState<boolean>(false);
 
   const {
     saveAccountSettings,
     saveTradeSetting,
     addSymbol,
-    removeSymbol
+    removeSymbol,
+    updateSymbolConfig
   } = useSettings({
     accountConfig,
     setAccountConfig,
@@ -83,6 +97,41 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
     setError(null);
     saveTradeSetting(tradeSetting);
     console.log("Saving trade settings:", tradeSetting);
+  };
+
+  // Handle adding a new symbol with configuration
+  const handleAddSymbol = () => {
+    if (!selectedSymbol) return;
+    
+    const symbolConfig: SymbolConfig = {
+      symbol: selectedSymbol,
+      isOption: isOptionSelected
+    };
+    
+    if (isOptionSelected === 'yes') {
+      symbolConfig.optionDetails = {
+        strike: optionStrike,
+        expiration: optionExpiration,
+        type: optionType
+      };
+    }
+    
+    addSymbol(symbolConfig);
+    setSelectedSymbol("");
+    setIsOptionSelected('no');
+    setOptionStrike(0);
+    setOptionExpiration("");
+    setOptionType('call');
+    setShowSymbolForm(false);
+  };
+
+  // Format the display string for a symbol configuration
+  const formatSymbolDisplay = (symbolConfig: SymbolConfig) => {
+    if (symbolConfig.isOption === 'yes' && symbolConfig.optionDetails) {
+      const { type, strike, expiration } = symbolConfig.optionDetails;
+      return `${symbolConfig.symbol} ${type.toUpperCase()} $${strike} exp: ${expiration}`;
+    }
+    return symbolConfig.symbol;
   };
 
   return (
@@ -194,33 +243,113 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
                   {error}
                 </div>
               )}
-              <div className="space-y-1">
-                <label className="text-xs md:text-sm font-medium">Subscribing Symbols</label>
-                <div className="flex gap-2">
-                  <select
-                    value={selectedSymbol}
-                    onChange={(e) => {
-                      const symbol = e.target.value;
-                      if (symbol) {
-                        addSymbol(symbol);
-                        setSelectedSymbol(""); // Reset after adding
-                      }
-                    }}
-                    className="w-full p-2 text-sm md:text-base border rounded-lg"
-                  >
-                    <option value="" disabled>Select a symbol</option>
-                    {STOCK_SYMBOLS.filter(symbol => !tradeSetting.subscribedSymbols.includes(symbol)).map(symbol => (
-                      <option key={symbol} value={symbol}>{symbol}</option>
-                    ))}
-                  </select>
+              <div>
+                <div className="grid grid-cols-2 items-center">
+                  <label className="text-xs md:text-sm font-medium">Subscribing Symbols</label>
+                  {!showSymbolForm && (
+                    <button
+                      onClick={() => setShowSymbolForm(true)}
+                      className="px-2 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+                    >
+                      Add Symbol
+                    </button>
+                  )}
                 </div>
-                {tradeSetting.subscribedSymbols.length > 0 && (
-                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {tradeSetting.subscribedSymbols.map(symbol => (
-                      <div key={symbol} className="flex items-center justify-between p-2 border-b">
-                        <span>{symbol}</span>
+
+                {showSymbolForm && (
+                  <div className="mt-2 p-4 border rounded-lg">
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <select
+                          value={selectedSymbol}
+                          onChange={(e) => setSelectedSymbol(e.target.value)}
+                          className="w-full p-2 text-sm md:text-base border rounded-lg"
+                        >
+                          <option value="" disabled>Select a symbol</option>
+                          {STOCK_SYMBOLS.filter(symbol =>
+                            !tradeSetting.subscribedSymbols.some(s => s.symbol === symbol)
+                          ).map(symbol => (
+                            <option key={symbol} value={symbol}>{symbol}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs md:text-sm font-medium">Trading Type</label>
+                        <select
+                          value={isOptionSelected}
+                          onChange={(e) => setIsOptionSelected(e.target.value as 'yes' | 'no')}
+                          className="w-full p-2 text-sm md:text-base border rounded-lg"
+                        >
+                          <option value="no">Stock</option>
+                          <option value="yes">Option</option>
+                        </select>
+                      </div>
+
+                      {isOptionSelected === 'yes' && (
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <label className="text-xs md:text-sm font-medium">Option Type</label>
+                            <select
+                              value={optionType}
+                              onChange={(e) => setOptionType(e.target.value as 'call' | 'put')}
+                              className="w-full p-2 text-sm md:text-base border rounded-lg"
+                            >
+                              <option value="call">Call</option>
+                              <option value="put">Put</option>
+                            </select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-xs md:text-sm font-medium">Strike Price ($)</label>
+                            <input
+                              type="number"
+                              value={optionStrike === 0 ? "" : optionStrike}
+                              onChange={(e) => setOptionStrike(parseFloat(e.target.value) || 0)}
+                              className="w-full p-2 text-sm md:text-base border rounded-lg"
+                              step="0.01"
+                              min="0"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-xs md:text-sm font-medium">Expiration Date</label>
+                            <input
+                              type="date"
+                              value={optionExpiration}
+                              onChange={(e) => setOptionExpiration(e.target.value)}
+                              className="w-full p-2 text-sm md:text-base border rounded-lg"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex gap-2">
                         <button
-                          onClick={() => removeSymbol(symbol)}
+                          onClick={handleAddSymbol}
+                          disabled={!selectedSymbol}
+                          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300"
+                        >
+                          Add
+                        </button>
+                        <button
+                          onClick={() => setShowSymbolForm(false)}
+                          className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {tradeSetting.subscribedSymbols.length > 0 && (
+                  <div className="mt-4 grid grid-cols-1 gap-2">
+                    {tradeSetting.subscribedSymbols.map((symbolConfig, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 border rounded">
+                        <span className="font-medium">{formatSymbolDisplay(symbolConfig)}</span>
+                        <button
+                          onClick={() => removeSymbol(symbolConfig.symbol)}
                           className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
                         >
                           Remove
@@ -230,25 +359,10 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
                   </div>
                 )}
               </div>
+
               <div className="space-y-2">
                 <label className="text-xs md:text-sm font-medium">Risk Settings</label>
-                <div className="grid md:grid-cols-4 gap-4">
-                  {/* Trading Type (isOption) */}
-                  <div className="space-y-1">
-                    <label className="text-xs md:text-sm">Trading Type</label>
-                    <select
-                      value={tradeSetting.isOption}
-                      onChange={(e) => setTradeSetting(prev => ({
-                        ...prev,
-                        isOption: e.target.value as 'yes' | 'no',
-                      }))}
-                      className="w-full p-2 text-sm md:text-base border rounded-lg"
-                    >
-                      <option value="yes">Options</option>
-                      <option value="no">Stocks</option>
-                    </select>
-                  </div>
-
+                <div className="grid md:grid-cols-3 gap-4">
                   {/* Max Position Size */}
                   <div className="space-y-1">
                     <label className="text-xs md:text-sm">Max Position Size ($)</label>
@@ -296,8 +410,8 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
                     />
                   </div>
                 </div>
-
               </div>
+
               <button
                 onClick={handleSaveTradeSettings}
                 className="w-full px-4 py-2 text-sm md:text-base bg-blue-500 text-white rounded-lg hover:bg-blue-600"
