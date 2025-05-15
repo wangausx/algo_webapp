@@ -32,7 +32,7 @@ export const useSettings = ({
     e.preventDefault();
     console.log('Payload being sent:', JSON.stringify(accountConfig));
     try {
-      const response = await fetch('/api/account', {
+      const response = await fetch('/api/router/account', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -132,7 +132,7 @@ export const useSettings = ({
 
       try {
         // Load account settings including balance
-        const accountRes = await fetch(`/api/account/${accountConfig.username}`);
+        const accountRes = await fetch(`/api/router/account/${accountConfig.username}`);
         if (!accountRes.ok) throw new Error('Failed to fetch account settings');
         const accountData = await accountRes.json();
         console.log('Loaded account data:', accountData);

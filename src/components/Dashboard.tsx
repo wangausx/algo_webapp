@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { useWebSocket } from '../hooks/useWebSocket';
+import { useWebSocket, PositionUpdatePayload, OrderUpdatePayload } from '../hooks/useWebSocket';
 
 interface OpenPositionInstance {
   symbol: string;
@@ -9,8 +9,8 @@ interface OpenPositionInstance {
   entryPrice: number;
   currentPrice: number | null;
   unrealizedPl: number;
-  entryTimestamp: Date;
-  strategyId?: string;
+  //entryTimestamp: Date;
+  //strategyId?: string;
 }
 
 interface DashboardProps {
@@ -26,18 +26,42 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useWebSocket(username, (positionUpdate) => {
-    setPositions((prev) => {
-      const updated = prev.filter((p) => p.symbol !== positionUpdate.symbol);
+  const handlePositionUpdate = useCallback((positionUpdate: PositionUpdatePayload['data']) => {
+    console.log('Position update received: ', positionUpdate);
+  setPositions((prev) => {
+    const updated = prev.filter((p) => p.symbol !== positionUpdate.symbol);
+    return [
+      ...updated,
+      {
+        symbol: positionUpdate.symbol,
+        side: positionUpdate.side,
+        quantity: Number(positionUpdate.quantity),
+        entryPrice: positionUpdate.entryPrice != null ? Number(positionUpdate.entryPrice) : null,
+        currentPrice: positionUpdate.currentPrice != null ? Number(positionUpdate.currentPrice) : null,
+        unrealizedPl: positionUpdate.unrealizedPl != null ? Number(positionUpdate.unrealizedPl) : null,
+      } as OpenPositionInstance,
+    ];
+  });
+  }, []);
+
+  
+  const handleOrderUpdate = useCallback((orderUpdate: OrderUpdatePayload['payload']) => {
+    console.log('orderUpdate received: ', orderUpdate);
+    setOrders((prev) => {
+      const updated = prev.filter((o) => o.symbol !== orderUpdate.symbol || o.status !== 'open');
       return [
         ...updated,
         {
-          ...positionUpdate,
-          entryTimestamp: new Date(positionUpdate.entryTimestamp),
-        } as OpenPositionInstance,
+          ...orderUpdate,
+          submittedAt: orderUpdate.submittedAt ? new Date(orderUpdate.submittedAt) : undefined,
+          expiresAt: orderUpdate.expiresAt ? new Date(orderUpdate.expiresAt) : null,
+        },
       ];
     });
-  });
+  }, []); // Add dependencies here if needed
+  
+  useWebSocket(username, handlePositionUpdate, handleOrderUpdate);
+  
 
   useEffect(() => {
     const fetchData = async () => {
@@ -51,57 +75,61 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
         setError(null);
 
         // Fetch account balance
-        const accountRes = await fetch(`/api/account/${username}`);
+        const accountRes = await fetch(`http://localhost:3001/api/router/account/${username}`);
         if (!accountRes.ok) {
           throw new Error(`Failed to fetch account data: ${accountRes.status}`);
         }
+        
         const accountData = await accountRes.json();
-        setAccountBalance(accountData.balance || 0);
+        setAccountBalance(Number(accountData.balance) || 0);
+        console.log('Acccount balance fetched: ', accountData.balance);
 
         // Fetch initial positions
-        const positionRes = await fetch(`/api/positions/${username}`);
+        const positionRes = await fetch(`/api/router/positions/${username}`);
         if (positionRes.ok) {
           const positionData = await positionRes.json();
+          console.log('Open positions retrieved: ', positionData)
           const positionArray = (Array.isArray(positionData)
             ? positionData
             : positionData.positions || []
           ).map((entry: any) => ({
             symbol: entry.symbol,
             side: entry.side,
-            quantity: entry.share_amount,
-            entryPrice: entry.entry_price,
+            quantity: entry.quantity,
+            entryPrice: entry.avgEntryPrice,
             currentPrice: entry.currentPrice ?? null,
-            unrealizedPl: entry.unrealizedPl ?? 0,
-            entryTimestamp: new Date(entry.entryTimestamp),
-            strategyId: entry.strategyId,
+            unrealizedPl: entry.unrealizedPl ?? null,
           }));
+          
           setPositions(positionArray);
         } else {
           console.log('No open positions yet!');
         }
-      // Fetch orders
-      const ordersRes = await fetch(`/api/orders/${username}`);
-      if (ordersRes.ok) {
-        const ordersData = await ordersRes.json();
-        const ordersArray = (Array.isArray(ordersData)
-          ? ordersData
-          : ordersData.orders || []
-        ).map((order: any) => ({
-          symbol: order.symbol,
-          orderType: order.order_type,
-          side: order.side,
-          quantity: order.quantity,
-          filledQty: order.filled_quantity,
-          avgFillPrice: order.avg_fill_price,
-          status: order.status,
-          submittedAt: new Date(order.submitted_at),
-          filledAt: order.filled_at ? new Date(order.filled_at) : null,
-          expiresAt: order.expires_at ? new Date(order.expires_at) : null,
-        }));
-        setOrders(ordersArray);
-      } else {
-        console.log('No orders found.');
-      }
+
+        // Fetch orders
+        const ordersRes = await fetch(`/api/router/orders/${username}`);
+        if (ordersRes.ok) {
+          const ordersData = await ordersRes.json();
+          console.log('Recent orders retrieved: ', ordersData)
+          const ordersArray = (Array.isArray(ordersData)
+            ? ordersData
+            : ordersData.orders || []
+          ).map((order: any) => ({
+            symbol: order.symbol,
+            //orderType: order.type,
+            side: order.side,
+            quantity: order.quantity,
+            filledQty: order.filledQty,
+            avgFillPrice: order.filledAvgPrice,
+            status: order.status,
+            //submittedAt: new Date(order.submitted_at),
+            submittedAt: order.submittedAt ? new Date(order.submittedAt) : null,
+            //expiresAt: order.expiredAt ? new Date(order.expiredAt) : null,
+          }));
+          setOrders(ordersArray);
+        } else {
+          console.log('No orders found.');
+        }
 
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -114,7 +142,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
     fetchData();
   }, [username]);
 
-  const totalPL = positions.reduce((acc, pos) => acc + pos.unrealizedPl, 0);
+  const totalPL = positions.reduce((acc, pos) => acc + (Number(pos.unrealizedPl) || 0), 0);
   const currentBalance = accountBalance + totalPL;
 
   if (!username) {
@@ -208,8 +236,6 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
                   <th className="p-2 text-left">Entry Price</th>
                   <th className="p-2 text-left">Current Price</th>
                   <th className="p-2 text-left">Unrealized P/L</th>
-                  <th className="p-2 text-left">Entry Time</th>
-                  <th className="p-2 text-left">Strategy</th>
                 </tr>
               </thead>
               <tbody>
@@ -218,11 +244,9 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
                     <td className="p-2">{entry.symbol}</td>
                     <td className="p-2 capitalize">{entry.side}</td>
                     <td className="p-2">{entry.quantity}</td>
-                    <td className="p-2">${entry.entryPrice.toFixed(2)}</td>
-                    <td className="p-2">${(entry.currentPrice ?? 0).toFixed(2)}</td>
-                    <td className="p-2">${entry.unrealizedPl.toFixed(2)}</td>
-                    <td className="p-2">{entry.entryTimestamp.toLocaleString()}</td>
-                    <td className="p-2">{entry.strategyId ?? '-'}</td>
+                    <td className="p-2">{typeof entry.entryPrice === 'number' ? `$${entry.entryPrice.toFixed(2)}` : '-'}</td>
+                    <td className="p-2">{typeof entry.currentPrice === 'number' ? `$${entry.currentPrice.toFixed(2)}` : '-'}</td>
+                    <td className="p-2">{typeof entry.unrealizedPl=== 'number' ? `$${entry.unrealizedPl.toFixed(2)}` : '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -230,6 +254,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
           </div>
         </CardContent>
       </Card>
+
       {/* Orders Table */}
       <Card className="mt-6 max-h-[40vh] overflow-y-auto">
         <CardHeader className="p-3 md:p-4 sticky top-0 bg-white z-10">
@@ -241,30 +266,28 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
               <thead className="text-xs md:text-sm bg-gray-50">
                 <tr>
                   <th className="p-2 text-left">Symbol</th>
-                  <th className="p-2 text-left">Type</th>
+                  {/*<th className="p-2 text-left">Type</th>*/}
                   <th className="p-2 text-left">Side</th>
                   <th className="p-2 text-left">Qty</th>
                   <th className="p-2 text-left">Filled Qty</th>
                   <th className="p-2 text-left">Avg. Fill Price</th>
                   <th className="p-2 text-left">Status</th>
-                  {/*<th className="p-2 text-left">Submitted At</th> */}
-                  <th className="p-2 text-left">Filled At</th>
-                  <th className="p-2 text-left">Expires At</th>
+                  <th className="p-2 text-left">Submitted At</th>
+                  {/*<th className="p-2 text-left">Expires At</th>*/}
                 </tr>
               </thead>
               <tbody>
                 {orders.map((order, index) => (
                   <tr key={index} className="border-t">
                     <td className="p-2">{order.symbol}</td>
-                    <td className="p-2 capitalize">{order.orderType}</td>
+                    {/*<td className="p-2 capitalize">{order.orderType}</td>*/}
                     <td className="p-2 capitalize">{order.side}</td>
                     <td className="p-2">{order.quantity}</td>
                     <td className="p-2">{order.filledQty}</td>
-                    <td className="p-2">${order.avgFillPrice?.toFixed(2) ?? '-'}</td>
+                    <td className="p-2">{typeof order.avgFillPrice === 'number' ? `$${order.avgFillPrice.toFixed(2)}` : '-'}</td>
                     <td className="p-2">{order.status}</td>
-                    <td className="p-2">{order.submittedAt.toLocaleString()}</td>
-                    <td className="p-2">{order.filledAt ? order.filledAt.toLocaleString() : '-'}</td>
-                    <td className="p-2">{order.expiresAt ? order.expiresAt.toLocaleString() : '-'}</td>
+                    <td className="p-2">{order.submittedAt ? order.submittedAt.toLocaleString() : ''}</td>
+                    {/*<td className="p-2">{order.expiresAt ? order.expiresAt.toLocaleString() : ''}</td>*/}
                   </tr>
                 ))}
               </tbody>

@@ -1,18 +1,12 @@
 import { useState, useEffect } from 'react';
 
-export interface Position {
-  symbol: string;
-  position: number;
-  entryPrice: number;
-  currentPrice: number;
-}
-
 export const useTrading = (username: string) => {
   const [tradingStatus, setTradingStatus] = useState<'stopped' | 'running'>('stopped');
 
   useEffect(() => {
     const fetchTradingStatus = async () => {
       try {
+        
         console.log('Fetching trading status for:', username);
         const response = await fetch(`/api/tradesetting/${username}`);
         if (!response.ok) {

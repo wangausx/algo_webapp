@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
-interface PositionUpdatePayload {
+export interface PositionUpdatePayload {
   type: 'position_update';
   data: {
     symbol: string;
-    side: 'long' | 'short';
+    side: 'long' | 'sell';
     quantity: number;
     entryPrice: number;
     currentPrice: number;
@@ -14,41 +14,134 @@ interface PositionUpdatePayload {
   };
 }
 
-export function useWebSocket(userId: string, onPositionUpdate: (data: PositionUpdatePayload['data']) => void) {
+export interface OrderUpdatePayload {
+  type: 'order_update';
+  payload: {
+    symbol: string;
+    orderType: string;
+    side: string;
+    qty: number;
+    filledQty: number;
+    avgFillPrice?: number;
+    status: string;
+    submittedAt: string;
+    filledAt?: string;
+    expiresAt?: string | null;
+  };
+}
+
+
+export function useWebSocket(
+  userId: string,
+  onPositionUpdate: (data: PositionUpdatePayload['data']) => void,
+  onStockOrder?: (data: OrderUpdatePayload['payload']) => void
+) {
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttempts = useRef(0);
+
   useEffect(() => {
     if (!userId) return;
 
     const WS_PORT = 3001;
-    const ws = new WebSocket(`ws://${window.location.hostname}:${WS_PORT}`);
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const WS_URL = `${protocol}://${window.location.hostname}:${WS_PORT}`;
+    console.log('Attempting WebSocket connection to:', WS_URL);
 
-    ws.onopen = () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'subscribe', userId }));
-      } else {
-        console.warn("WebSocket not ready:", ws.readyState);
-      }
-    };
-
-    ws.onmessage = (event) => {
+    const connect = () => {
       try {
-        const message = JSON.parse(event.data);
-        if (message.type === 'position_update') {
-          onPositionUpdate(message.data);
-        }
+        const ws = new WebSocket(WS_URL);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          console.log('WebSocket connected');
+          reconnectAttempts.current = 0;
+          ws.send(JSON.stringify({ type: 'subscribe', userId }));
+          console.log('User subscribed to WebSocket:', userId);
+
+          // Start heartbeat
+          heartbeatRef.current = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'ping' }));
+            }
+          }, 10000);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            console.log('Websocket event message received:', message.type);
+            switch (message.type) {
+              case 'position_update':
+                onPositionUpdate(message.data);
+                break;
+              case 'order_update':
+                onStockOrder?.(message.payload);
+                break;
+              case 'pong':
+                // Optional: log heartbeat acknowledgment
+                break;
+              default:
+                console.warn('Unhandled message type:', message.type);
+            }
+          } catch (err) {
+            console.error('Failed to parse WebSocket message:', event.data);
+          }
+        };
+
+        ws.onclose = () => {
+          console.warn('WebSocket connection closed');
+          cleanup();
+          scheduleReconnect();
+        };
+
+        ws.onerror = (err) => {
+          console.error('WebSocket error:', err);
+          ws.close(); // Triggers `onclose`
+        };
       } catch (err) {
-        console.error('Failed to parse WebSocket message:', event.data);
-      }
+        console.error('Failed to create WebSocket:', err);
+      }              
     };
 
-    ws.onclose = () => {
-      console.log('WebSocket connection closed.');
+    const cleanup = () => {
+      if (heartbeatRef.current) {
+        clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
+      }
+    
+      if (wsRef.current) {
+        try {
+          if (wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'unsubscribe', userId }));
+          }
+          wsRef.current.close();
+        } catch (err) {
+          console.error('Error cleaning up WebSocket:', err);
+        }
+        wsRef.current = null;
+      }
     };
+    
+    const scheduleReconnect = () => {
+      if (reconnectTimeoutRef.current) return;
+      const delay = Math.min(10000, 1000 * 2 ** reconnectAttempts.current); // exponential backoff up to 10s
+      console.log(`Attempting to reconnect in ${delay / 1000}s...`);
+      reconnectTimeoutRef.current = setTimeout(() => {
+        reconnectAttempts.current += 1;
+        reconnectTimeoutRef.current = null;
+        connect();
+      }, delay);
+    };
+
+    connect();
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'unsubscribe', userId }));
-      }
-      ws.close();
+      cleanup();
+      reconnectTimeoutRef.current && clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     };
-  }, [userId, onPositionUpdate]);
+  }, [userId, onPositionUpdate, onStockOrder]); // Reconnect if userId changes
+  // or if the callback functions change
 }
