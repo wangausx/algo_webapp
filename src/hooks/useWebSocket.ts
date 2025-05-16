@@ -1,40 +1,20 @@
 import { useEffect, useRef } from 'react';
+import { OpenPosition, StockOrder } from '../components/Dashboard';
 
 export interface PositionUpdatePayload {
   type: 'position_update';
-  data: {
-    symbol: string;
-    side: 'long' | 'sell';
-    quantity: number;
-    entryPrice: number;
-    currentPrice: number;
-    unrealizedPl: number;
-    entryTimestamp: string;
-    strategyId?: string;
-  };
+  payload: OpenPosition;
 }
 
 export interface OrderUpdatePayload {
   type: 'order_update';
-  payload: {
-    symbol: string;
-    orderType: string;
-    side: string;
-    qty: number;
-    filledQty: number;
-    avgFillPrice?: number;
-    status: string;
-    submittedAt: string;
-    filledAt?: string;
-    expiresAt?: string | null;
-  };
+  payload: StockOrder;
 }
-
 
 export function useWebSocket(
   userId: string,
-  onPositionUpdate: (data: PositionUpdatePayload['data']) => void,
-  onStockOrder?: (data: OrderUpdatePayload['payload']) => void
+  onPositionUpdate: (payload: OpenPosition) => void,
+  onStockOrder?: (payload: StockOrder) => void
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -74,7 +54,7 @@ export function useWebSocket(
             console.log('Websocket event message received:', message.type);
             switch (message.type) {
               case 'position_update':
-                onPositionUpdate(message.data);
+                onPositionUpdate(message.payload);
                 break;
               case 'order_update':
                 onStockOrder?.(message.payload);

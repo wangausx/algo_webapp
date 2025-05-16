@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { useWebSocket, PositionUpdatePayload, OrderUpdatePayload } from '../hooks/useWebSocket';
 
-interface OpenPositionInstance {
+export interface OpenPosition {
   symbol: string;
   side: 'long' | 'short';
   quantity: number;
@@ -10,6 +10,18 @@ interface OpenPositionInstance {
   currentPrice: number | null;
   unrealizedPl: number;
   //entryTimestamp: Date;
+  //strategyId?: string;
+}
+
+export interface StockOrder {
+  symbol: string;
+  quantity: number;
+  filledQuantity?: number;
+  side: 'buy' | 'sell';
+  status: 'pending' | 'filled' | 'partially_filled' | 'canceled' | 'rejected';
+  filledAvgPrice?: number;
+  submittedAt: Date;
+  //filledAt?: Date;
   //strategyId?: string;
 }
 
@@ -21,47 +33,49 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, username = '' }) => {
   const [accountBalance, setAccountBalance] = useState(10000);
-  const [positions, setPositions] = useState<OpenPositionInstance[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
+  const [positions, setPositions] = useState<OpenPosition[]>([]);
+  const [orders, setOrders] = useState<StockOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const handlePositionUpdate = useCallback((positionUpdate: PositionUpdatePayload['data']) => {
+  const handlePositionUpdate = useCallback((positionUpdate: PositionUpdatePayload['payload']) => {
     console.log('Position update received: ', positionUpdate);
-  setPositions((prev) => {
-    const updated = prev.filter((p) => p.symbol !== positionUpdate.symbol);
-    return [
-      ...updated,
-      {
-        symbol: positionUpdate.symbol,
-        side: positionUpdate.side,
-        quantity: Number(positionUpdate.quantity),
-        entryPrice: positionUpdate.entryPrice != null ? Number(positionUpdate.entryPrice) : null,
-        currentPrice: positionUpdate.currentPrice != null ? Number(positionUpdate.currentPrice) : null,
-        unrealizedPl: positionUpdate.unrealizedPl != null ? Number(positionUpdate.unrealizedPl) : null,
-      } as OpenPositionInstance,
-    ];
-  });
-  }, []);
-
-  
-  const handleOrderUpdate = useCallback((orderUpdate: OrderUpdatePayload['payload']) => {
-    console.log('orderUpdate received: ', orderUpdate);
-    setOrders((prev) => {
-      const updated = prev.filter((o) => o.symbol !== orderUpdate.symbol || o.status !== 'open');
+    setPositions((prev) => {
+      const updated = prev.filter((p) => p.symbol !== positionUpdate.symbol);
       return [
         ...updated,
         {
-          ...orderUpdate,
-          submittedAt: orderUpdate.submittedAt ? new Date(orderUpdate.submittedAt) : undefined,
-          expiresAt: orderUpdate.expiresAt ? new Date(orderUpdate.expiresAt) : null,
-        },
+          symbol: positionUpdate.symbol,
+          side: positionUpdate.side,
+          quantity: Number(positionUpdate.quantity),
+          entryPrice: Number(positionUpdate.entryPrice) || 0,
+          currentPrice: positionUpdate.currentPrice != null ? Number(positionUpdate.currentPrice) : null,
+          unrealizedPl: positionUpdate.unrealizedPl != null ? Number(positionUpdate.unrealizedPl) : 0,
+        } as OpenPosition,
       ];
     });
-  }, []); // Add dependencies here if needed
-  
+  }, []);
+
+  const handleOrderUpdate = useCallback((orderUpdate: OrderUpdatePayload['payload']) => {
+    console.log('orderUpdate received: ', orderUpdate);
+    setOrders((prev) => {
+      const updated = prev.filter((o) => o.symbol !== orderUpdate.symbol || o.status !== 'pending');
+      return [
+        ...updated,
+        {
+          symbol: orderUpdate.symbol,
+          quantity: Number(orderUpdate.quantity) || 0,
+          filledQuantity: Number(orderUpdate.filledQuantity) || 0,
+          side: orderUpdate.side,
+          status: orderUpdate.status,
+          filledAvgPrice: Number(orderUpdate.filledAvgPrice) || undefined,
+          submittedAt: orderUpdate.submittedAt ? new Date(orderUpdate.submittedAt) : new Date(),
+        } as StockOrder,
+      ];
+    });
+  }, []);
+
   useWebSocket(username, handlePositionUpdate, handleOrderUpdate);
-  
 
   useEffect(() => {
     const fetchData = async () => {
@@ -75,31 +89,31 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
         setError(null);
 
         // Fetch account balance
-        const accountRes = await fetch(`http://localhost:3001/api/router/account/${username}`);
+        const accountRes = await fetch(`http://localhost:3001/router/account/${username}`);
         if (!accountRes.ok) {
           throw new Error(`Failed to fetch account data: ${accountRes.status}`);
         }
         
         const accountData = await accountRes.json();
         setAccountBalance(Number(accountData.balance) || 0);
-        console.log('Acccount balance fetched: ', accountData.balance);
+        console.log('Account balance fetched: ', accountData.balance);
 
         // Fetch initial positions
-        const positionRes = await fetch(`/api/router/positions/${username}`);
+        const positionRes = await fetch(`http://localhost:3001/router/positions/${username}`);
         if (positionRes.ok) {
           const positionData = await positionRes.json();
-          console.log('Open positions retrieved: ', positionData)
+          console.log('Open positions retrieved: ', positionData);
           const positionArray = (Array.isArray(positionData)
             ? positionData
             : positionData.positions || []
           ).map((entry: any) => ({
             symbol: entry.symbol,
             side: entry.side,
-            quantity: entry.quantity,
-            entryPrice: entry.avgEntryPrice,
-            currentPrice: entry.currentPrice ?? null,
-            unrealizedPl: entry.unrealizedPl ?? null,
-          }));
+            quantity: Number(entry.quantity) || 0,
+            entryPrice: Number(entry.avgEntryPrice) || 0,
+            currentPrice: entry.currentPrice != null ? Number(entry.currentPrice) : null,
+            unrealizedPl: entry.unrealizedPl != null ? Number(entry.unrealizedPl) : 0,
+          } as OpenPosition));
           
           setPositions(positionArray);
         } else {
@@ -107,25 +121,22 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
         }
 
         // Fetch orders
-        const ordersRes = await fetch(`/api/router/orders/${username}`);
+        const ordersRes = await fetch(`http://localhost:3001/router/orders/${username}`);
         if (ordersRes.ok) {
           const ordersData = await ordersRes.json();
-          console.log('Recent orders retrieved: ', ordersData)
+          console.log('Recent orders retrieved: ', ordersData);
           const ordersArray = (Array.isArray(ordersData)
             ? ordersData
             : ordersData.orders || []
           ).map((order: any) => ({
             symbol: order.symbol,
-            //orderType: order.type,
+            quantity: Number(order.quantity) || 0,
+            filledQuantity: Number(order.filledQty) || undefined,
             side: order.side,
-            quantity: order.quantity,
-            filledQty: order.filledQty,
-            avgFillPrice: order.filledAvgPrice,
             status: order.status,
-            //submittedAt: new Date(order.submitted_at),
-            submittedAt: order.submittedAt ? new Date(order.submittedAt) : null,
-            //expiresAt: order.expiredAt ? new Date(order.expiredAt) : null,
-          }));
+            filledAvgPrice: Number(order.filledAvgPrice) || undefined,
+            submittedAt: order.submittedAt ? new Date(order.submittedAt) : new Date(),
+          } as StockOrder));
           setOrders(ordersArray);
         } else {
           console.log('No orders found.');
@@ -239,16 +250,22 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
                 </tr>
               </thead>
               <tbody>
-                {positions.map((entry, index) => (
-                  <tr key={index} className="border-t">
-                    <td className="p-2">{entry.symbol}</td>
-                    <td className="p-2 capitalize">{entry.side}</td>
-                    <td className="p-2">{entry.quantity}</td>
-                    <td className="p-2">{typeof entry.entryPrice === 'number' ? `$${entry.entryPrice.toFixed(2)}` : '-'}</td>
-                    <td className="p-2">{typeof entry.currentPrice === 'number' ? `$${entry.currentPrice.toFixed(2)}` : '-'}</td>
-                    <td className="p-2">{typeof entry.unrealizedPl=== 'number' ? `$${entry.unrealizedPl.toFixed(2)}` : '-'}</td>
+                {positions.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-4 text-center text-gray-500">No open positions</td>
                   </tr>
-                ))}
+                ) : (
+                  positions.map((position, index) => (
+                    <tr key={index} className="border-t">
+                      <td className="p-2">{position.symbol}</td>
+                      <td className="p-2 capitalize">{position.side}</td>
+                      <td className="p-2">{position.quantity}</td>
+                      <td className="p-2">{typeof position.entryPrice === 'number' ? `$${position.entryPrice.toFixed(2)}` : '-'}</td>
+                      <td className="p-2">{position.currentPrice !== null ? `$${position.currentPrice.toFixed(2)}` : '-'}</td>
+                      <td className="p-2">{typeof position.unrealizedPl === 'number' ? `$${position.unrealizedPl.toFixed(2)}` : '-'}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -266,36 +283,37 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
               <thead className="text-xs md:text-sm bg-gray-50">
                 <tr>
                   <th className="p-2 text-left">Symbol</th>
-                  {/*<th className="p-2 text-left">Type</th>*/}
                   <th className="p-2 text-left">Side</th>
                   <th className="p-2 text-left">Qty</th>
                   <th className="p-2 text-left">Filled Qty</th>
                   <th className="p-2 text-left">Avg. Fill Price</th>
                   <th className="p-2 text-left">Status</th>
                   <th className="p-2 text-left">Submitted At</th>
-                  {/*<th className="p-2 text-left">Expires At</th>*/}
                 </tr>
               </thead>
               <tbody>
-                {orders.map((order, index) => (
-                  <tr key={index} className="border-t">
-                    <td className="p-2">{order.symbol}</td>
-                    {/*<td className="p-2 capitalize">{order.orderType}</td>*/}
-                    <td className="p-2 capitalize">{order.side}</td>
-                    <td className="p-2">{order.quantity}</td>
-                    <td className="p-2">{order.filledQty}</td>
-                    <td className="p-2">{typeof order.avgFillPrice === 'number' ? `$${order.avgFillPrice.toFixed(2)}` : '-'}</td>
-                    <td className="p-2">{order.status}</td>
-                    <td className="p-2">{order.submittedAt ? order.submittedAt.toLocaleString() : ''}</td>
-                    {/*<td className="p-2">{order.expiresAt ? order.expiresAt.toLocaleString() : ''}</td>*/}
+                {orders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-4 text-center text-gray-500">No recent orders</td>
                   </tr>
-                ))}
+                ) : (
+                  orders.map((order, index) => (
+                    <tr key={index} className="border-t">
+                      <td className="p-2">{order.symbol}</td>
+                      <td className="p-2 capitalize">{order.side}</td>
+                      <td className="p-2">{order.quantity}</td>
+                      <td className="p-2">{order.filledQuantity || '-'}</td>
+                      <td className="p-2">{order.filledAvgPrice ? `$${order.filledAvgPrice.toFixed(2)}` : '-'}</td>
+                      <td className="p-2 capitalize">{order.status}</td>
+                      <td className="p-2">{order.submittedAt.toLocaleString()}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
-
     </div>
   );
 };

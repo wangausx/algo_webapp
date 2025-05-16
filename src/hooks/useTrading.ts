@@ -34,7 +34,7 @@ export const useTrading = (username: string) => {
       
       try {
         console.log('Request trading status change for:', username);
-        fetch('/api/router/trade', {
+        fetch('/router/trade', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
