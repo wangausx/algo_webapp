@@ -21,6 +21,7 @@ export interface StockOrder {
   status: 'pending' | 'filled' | 'partially_filled' | 'canceled' | 'rejected';
   filledAvgPrice?: number;
   submittedAt: Date;
+  clientOrderId?: string;
   //filledAt?: Date;
   //strategyId?: string;
 }
@@ -40,8 +41,11 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
 
   const handlePositionUpdate = useCallback((positionUpdate: PositionUpdatePayload['payload']) => {
     console.log('Position update received: ', positionUpdate);
+    
     setPositions((prev) => {
-      const updated = prev.filter((p) => p.symbol !== positionUpdate.symbol);
+      const updated = prev.filter(
+        (p) => !(p.symbol === positionUpdate.symbol && p.side === positionUpdate.side)
+      );      
       return [
         ...updated,
         {
@@ -54,6 +58,11 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
         } as OpenPosition,
       ];
     });
+  }, []);
+
+  const handlePositionDeletion = useCallback((deletionUpdate: { symbol: string }) => {
+    console.log('Position deletion received: ', deletionUpdate);
+    setPositions((prev) => prev.filter((p) => p.symbol !== deletionUpdate.symbol));
   }, []);
 
   const handleOrderUpdate = useCallback((orderUpdate: OrderUpdatePayload['payload']) => {
@@ -70,12 +79,13 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
           status: orderUpdate.status,
           filledAvgPrice: Number(orderUpdate.filledAvgPrice) || undefined,
           submittedAt: orderUpdate.submittedAt ? new Date(orderUpdate.submittedAt) : new Date(),
+          clientOrderId: orderUpdate.clientOrderId,
         } as StockOrder,
       ];
     });
   }, []);
 
-  useWebSocket(username, handlePositionUpdate, handleOrderUpdate);
+  useWebSocket(username, handlePositionUpdate, handleOrderUpdate, handlePositionDeletion);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -131,11 +141,12 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
           ).map((order: any) => ({
             symbol: order.symbol,
             quantity: Number(order.quantity) || 0,
-            filledQuantity: Number(order.filledQty) || undefined,
+            filledQuantity: Number(order.filledQuantity) || undefined,
             side: order.side,
             status: order.status,
             filledAvgPrice: Number(order.filledAvgPrice) || undefined,
             submittedAt: order.submittedAt ? new Date(order.submittedAt) : new Date(),
+            clientOrderId: order.clientOrderId,
           } as StockOrder));
           setOrders(ordersArray);
         } else {

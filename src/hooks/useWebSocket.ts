@@ -11,10 +11,18 @@ export interface OrderUpdatePayload {
   payload: StockOrder;
 }
 
+export interface PositionDeletionPayload {
+  type: 'position_deletion';
+  payload: {
+    symbol: string;
+  };
+}
+
 export function useWebSocket(
   userId: string,
   onPositionUpdate: (payload: OpenPosition) => void,
-  onStockOrder?: (payload: StockOrder) => void
+  onStockOrder?: (payload: StockOrder) => void,
+  onPositionDeletion?: (payload: { symbol: string }) => void
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -58,6 +66,9 @@ export function useWebSocket(
                 break;
               case 'order_update':
                 onStockOrder?.(message.payload);
+                break;
+              case 'position_deletion':
+                onPositionDeletion?.(message.payload);
                 break;
               case 'pong':
                 // Optional: log heartbeat acknowledgment
@@ -122,6 +133,5 @@ export function useWebSocket(
       reconnectTimeoutRef.current && clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     };
-  }, [userId, onPositionUpdate, onStockOrder]); // Reconnect if userId changes
-  // or if the callback functions change
+  }, [userId, onPositionUpdate, onStockOrder, onPositionDeletion]); // Reconnect if userId changes or if the callback functions change
 }
