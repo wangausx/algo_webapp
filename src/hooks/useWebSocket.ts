@@ -22,7 +22,7 @@ export function useWebSocket(
   userId: string,
   onPositionUpdate: (payload: OpenPosition) => void,
   onStockOrder?: (payload: StockOrder) => void,
-  onPositionDeletion?: (payload: { symbol: string }) => void
+  onPositionDeletion?: (symbol: string) => void
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -68,7 +68,7 @@ export function useWebSocket(
                 onStockOrder?.(message.payload);
                 break;
               case 'position_deletion':
-                onPositionDeletion?.(message.payload);
+                onPositionDeletion?.(message.payload.symbol);
                 break;
               case 'pong':
                 // Optional: log heartbeat acknowledgment

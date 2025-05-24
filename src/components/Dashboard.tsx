@@ -9,8 +9,16 @@ export interface OpenPosition {
   entryPrice: number;
   currentPrice: number | null;
   unrealizedPl: number;
-  //entryTimestamp: Date;
-  //strategyId?: string;
+}
+
+export interface ClosedPosition {
+  symbol: string;
+  side: 'long' | 'short';
+  quantity: number;
+  entryPrice: number;
+  exitPrice: number;
+  realizedPl: number;
+  closedAt: Date | null;
 }
 
 export interface StockOrder {
@@ -22,8 +30,6 @@ export interface StockOrder {
   filledAvgPrice?: number;
   submittedAt: Date;
   clientOrderId?: string;
-  //filledAt?: Date;
-  //strategyId?: string;
 }
 
 interface DashboardProps {
@@ -35,14 +41,69 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, username = '' }) => {
   const [accountBalance, setAccountBalance] = useState(10000);
   const [positions, setPositions] = useState<OpenPosition[]>([]);
+  const [closedPositions, setClosedPositions] = useState<ClosedPosition[]>([]);
   const [orders, setOrders] = useState<StockOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showClosedPositions, setShowClosedPositions] = useState(false);
+
+  const fetchClosedPositions = useCallback(async () => {
+    if (!username) return;
+    
+    try {
+      const closedPositionsRes = await fetch(`http://localhost:3001/router/closed-positions/${username}`);
+      if (closedPositionsRes.ok) {
+        const closedPositionsData = await closedPositionsRes.json();
+        console.log('Closed positions retrieved: ', closedPositionsData);
+        const closedPositionsArray = (Array.isArray(closedPositionsData)
+          ? closedPositionsData
+          : closedPositionsData.positions || []
+        ).map((entry: any) => {
+          // Get the most recent trade's entryDate as the closedAt time
+          let closedAtDate: Date | null = null;
+          if (entry.trades && entry.trades.length > 0) {
+            // Sort trades by entryDate in descending order and take the most recent one
+            const sortedTrades = [...entry.trades].sort((a: any, b: any) => 
+              new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()
+            );
+            const mostRecentTrade = sortedTrades[0];
+            closedAtDate = new Date(mostRecentTrade.entryDate);
+          }
+
+          return {
+            symbol: entry.symbol,
+            side: entry.side,
+            quantity: Number(entry.quantity) || 0,
+            entryPrice: Number(entry.entryPrice) || 0,
+            exitPrice: Number(entry.exitPrice) || 0,
+            realizedPl: Number(entry.realizedPl) || 0,
+            closedAt: closedAtDate,
+          } as ClosedPosition;
+        }).filter((position: ClosedPosition) => position.closedAt !== null);
+        
+        setClosedPositions(closedPositionsArray);
+      } else {
+        console.log('No closed positions yet!');
+      }
+    } catch (error) {
+      console.error('Error fetching closed positions:', error);
+    }
+  }, [username]);
 
   const handlePositionUpdate = useCallback((positionUpdate: PositionUpdatePayload['payload']) => {
     console.log('Position update received: ', positionUpdate);
     
     setPositions((prev) => {
+      // If quantity is 0, this is a position deletion
+      if (positionUpdate.quantity === 0) {
+        // Fetch updated closed positions when a position is closed
+        fetchClosedPositions();
+        return prev.filter(
+          (p) => !(p.symbol === positionUpdate.symbol && p.side === positionUpdate.side)
+        );
+      }
+      
+      // Otherwise, update the position
       const updated = prev.filter(
         (p) => !(p.symbol === positionUpdate.symbol && p.side === positionUpdate.side)
       );      
@@ -58,12 +119,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
         } as OpenPosition,
       ];
     });
-  }, []);
-
-  const handlePositionDeletion = useCallback((deletionUpdate: { symbol: string }) => {
-    console.log('Position deletion received: ', deletionUpdate);
-    setPositions((prev) => prev.filter((p) => p.symbol !== deletionUpdate.symbol));
-  }, []);
+  }, [fetchClosedPositions]);
 
   const handleOrderUpdate = useCallback((orderUpdate: OrderUpdatePayload['payload']) => {
     console.log('orderUpdate received: ', orderUpdate);
@@ -84,6 +140,18 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
       ];
     });
   }, []);
+
+  const handlePositionDeletion = useCallback((symbol: string) => {
+    console.log('Position deletion received for symbol:', symbol);
+    setPositions((prev) => {
+      const updated = prev.filter((p) => p.symbol !== symbol);
+      if (updated.length !== prev.length) {
+        // If any positions were removed, fetch updated closed positions
+        fetchClosedPositions();
+      }
+      return updated;
+    });
+  }, [fetchClosedPositions]);
 
   useWebSocket(username, handlePositionUpdate, handleOrderUpdate, handlePositionDeletion);
 
@@ -130,6 +198,9 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
           console.log('No open positions yet!');
         }
 
+        // Fetch initial closed positions
+        await fetchClosedPositions();
+
         // Fetch orders
         const ordersRes = await fetch(`http://localhost:3001/router/orders/${username}`);
         if (ordersRes.ok) {
@@ -162,9 +233,10 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
     };
 
     fetchData();
-  }, [username]);
+  }, [username, fetchClosedPositions]);
 
-  const totalPL = positions.reduce((acc, pos) => acc + (Number(pos.unrealizedPl) || 0), 0);
+  const totalPL = positions.reduce((acc, pos) => acc + (Number(pos.unrealizedPl) || 0), 0) +
+                 closedPositions.reduce((acc, pos) => acc + (Number(pos.realizedPl) || 0), 0);
   const currentBalance = accountBalance + totalPL;
 
   if (!username) {
@@ -232,7 +304,9 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
             <CardTitle className="text-sm md:text-base">Today's P/L</CardTitle>
           </CardHeader>
           <CardContent className="p-3 md:p-4">
-            <div className="text-xl md:text-2xl font-bold text-gray-700">
+            <div className={`text-xl md:text-2xl font-bold ${
+              totalPL >= 0 ? 'text-green-600' : 'text-red-600'
+            }`}>
               ${totalPL.toFixed(2)}
             </div>
             <div className="text-xs md:text-sm text-gray-500">
@@ -273,7 +347,15 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
                       <td className="p-2">{position.quantity}</td>
                       <td className="p-2">{typeof position.entryPrice === 'number' ? `$${position.entryPrice.toFixed(2)}` : '-'}</td>
                       <td className="p-2">{position.currentPrice !== null ? `$${position.currentPrice.toFixed(2)}` : '-'}</td>
-                      <td className="p-2">{typeof position.unrealizedPl === 'number' ? `$${position.unrealizedPl.toFixed(2)}` : '-'}</td>
+                      <td className={`p-2 ${
+                        typeof position.unrealizedPl === 'number' 
+                          ? position.unrealizedPl >= 0 
+                            ? 'text-green-600' 
+                            : 'text-red-600'
+                          : ''
+                      }`}>
+                        {typeof position.unrealizedPl === 'number' ? `$${position.unrealizedPl.toFixed(2)}` : '-'}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -282,6 +364,71 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
           </div>
         </CardContent>
       </Card>
+
+      {/* Closed Positions Section */}
+      <div className="mt-6">
+        <div className="rounded-lg overflow-hidden">
+          <button
+            onClick={() => setShowClosedPositions(!showClosedPositions)}
+            className={`w-full py-3 px-4 transition-colors duration-200 flex items-center justify-between bg-white hover:bg-gray-50 text-gray-700 border border-gray-200`}
+          >
+            <div className="flex items-center gap-2">
+              <span className={`text-xl transition-transform duration-200 ${showClosedPositions ? 'rotate-90' : ''}`}>›</span>
+              <span className="font-medium">Closed Positions</span>
+            </div>
+            <span className="text-sm text-gray-500">
+              {closedPositions.length} position{closedPositions.length !== 1 ? 's' : ''}
+            </span>
+          </button>
+
+          <div className={`transition-all duration-300 ease-in-out ${showClosedPositions ? 'max-h-[60vh] opacity-100' : 'max-h-0 opacity-0'}`}>
+            <Card className="rounded-t-none border-t-0">
+              <CardContent className="p-0">
+                <div className="overflow-y-auto max-h-[60vh]">
+                  <table className="w-full">
+                    <thead className="text-xs md:text-sm bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="p-2 text-left">Symbol</th>
+                        <th className="p-2 text-left">Side</th>
+                        <th className="p-2 text-left">Qty</th>
+                        <th className="p-2 text-left">Entry Price</th>
+                        <th className="p-2 text-left">Exit Price</th>
+                        <th className="p-2 text-left">Realized P/L</th>
+                        <th className="p-2 text-left">Closed At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {closedPositions.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-4 text-center text-gray-500">No closed positions</td>
+                        </tr>
+                      ) : (
+                        [...closedPositions]
+                          .sort((a, b) => (b.closedAt?.getTime() || 0) - (a.closedAt?.getTime() || 0))
+                          .map((position, index) => (
+                            <tr key={index} className="border-t">
+                              <td className="p-2">{position.symbol}</td>
+                              <td className="p-2 capitalize">{position.side}</td>
+                              <td className="p-2">{position.quantity}</td>
+                              <td className="p-2">${position.entryPrice.toFixed(2)}</td>
+                              <td className="p-2">${position.exitPrice.toFixed(2)}</td>
+                              <td className={`p-2 ${
+                                position.realizedPl >= 0 ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                ${position.realizedPl.toFixed(2)}
+                              </td>
+                              <td className="p-2">{position.closedAt ? position.closedAt.toLocaleString() : 'Unknown'}</td>
+                            </tr>
+                          ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
 
       {/* Orders Table */}
       <Card className="mt-6 max-h-[40vh] overflow-y-auto">
