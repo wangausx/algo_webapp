@@ -40,6 +40,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, username = '' }) => {
   const [accountBalance, setAccountBalance] = useState(10000);
+  const [dailyPnL, setDailyPnL] = useState(0);
   const [positions, setPositions] = useState<OpenPosition[]>([]);
   const [closedPositions, setClosedPositions] = useState<ClosedPosition[]>([]);
   const [orders, setOrders] = useState<StockOrder[]>([]);
@@ -153,6 +154,34 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
     });
   }, [fetchClosedPositions]);
 
+  const handleClosePosition = async (symbol: string, side: 'long' | 'short') => {
+    if (!username) return;
+    
+    try {
+      const response = await fetch(`http://localhost:3001/router/cancel-position`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          symbol,
+          side,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to close position');
+      }
+
+      // The position will be removed via the WebSocket update
+      console.log(`Position close request sent for ${symbol} (${side})`);
+    } catch (error) {
+      console.error('Error closing position:', error);
+      setError(error instanceof Error ? error.message : 'Failed to close position');
+    }
+  };
+
   useWebSocket(username, handlePositionUpdate, handleOrderUpdate, handlePositionDeletion);
 
   useEffect(() => {
@@ -174,6 +203,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
         
         const accountData = await accountRes.json();
         setAccountBalance(Number(accountData.balance) || 0);
+        setDailyPnL(Number(accountData.dailyPnL) || 0);
         console.log('Account balance fetched: ', accountData.balance);
 
         // Fetch initial positions
@@ -235,9 +265,6 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
     fetchData();
   }, [username, fetchClosedPositions]);
 
-  const totalPL = positions.reduce((acc, pos) => acc + (Number(pos.unrealizedPl) || 0), 0) +
-                 closedPositions.reduce((acc, pos) => acc + (Number(pos.realizedPl) || 0), 0);
-  const currentBalance = accountBalance + totalPL;
 
   if (!username) {
     return <div>Your trading account is not configured yet! Please set your account and manage your trading allocations under Settings.</div>;
@@ -293,7 +320,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
           </CardHeader>
           <CardContent className="p-3 md:p-4">
             <div className="text-xl md:text-2xl font-bold">
-              ${currentBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              ${accountBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </div>
             <div className="text-xs md:text-sm text-gray-500">Demo Account</div>
           </CardContent>
@@ -305,12 +332,12 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
           </CardHeader>
           <CardContent className="p-3 md:p-4">
             <div className={`text-xl md:text-2xl font-bold ${
-              totalPL >= 0 ? 'text-green-600' : 'text-red-600'
+              dailyPnL >= 0 ? 'text-green-600' : 'text-red-600'
             }`}>
-              ${totalPL.toFixed(2)}
+              ${dailyPnL.toFixed(2)}
             </div>
             <div className="text-xs md:text-sm text-gray-500">
-              {accountBalance > 0 ? ((totalPL / accountBalance) * 100).toFixed(2) : '0.00'}% ROI
+              {accountBalance > 0 ? ((dailyPnL / accountBalance) * 100).toFixed(2) : '0.00'}% ROI
             </div>
           </CardContent>
         </Card>
@@ -332,12 +359,13 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
                   <th className="p-2 text-left">Entry Price</th>
                   <th className="p-2 text-left">Current Price</th>
                   <th className="p-2 text-left">Unrealized P/L</th>
+                  <th className="p-2 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {positions.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-4 text-center text-gray-500">No open positions</td>
+                    <td colSpan={7} className="p-4 text-center text-gray-500">No open positions</td>
                   </tr>
                 ) : (
                   positions.map((position, index) => (
@@ -355,6 +383,15 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
                           : ''
                       }`}>
                         {typeof position.unrealizedPl === 'number' ? `$${position.unrealizedPl.toFixed(2)}` : '-'}
+                      </td>
+                      <td className="p-2">
+                        <button
+                          onClick={() => handleClosePosition(position.symbol, position.side)}
+                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors"
+                          title="Close position"
+                        >
+                          ✕
+                        </button>
                       </td>
                     </tr>
                   ))
