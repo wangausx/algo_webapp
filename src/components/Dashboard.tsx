@@ -159,13 +159,12 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
     if (!username) return;
     
     try {
-      const response = await fetch(`http://localhost:3001/router/cancel-position`, {
+      const response = await fetch(`http://localhost:3001/router/cancel-position/${username}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          username,
           symbol,
           side,
         }),
