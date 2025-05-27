@@ -47,6 +47,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showClosedPositions, setShowClosedPositions] = useState(false);
+  const [showRecentOrders, setShowRecentOrders] = useState(false);
 
   const fetchClosedPositions = useCallback(async () => {
     if (!username) return;
@@ -346,7 +347,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
       {/* Positions Table */}
       <Card className="max-h-[40vh] overflow-y-auto">
         <CardHeader className="p-3 md:p-4 sticky top-0 bg-white z-10">
-          <CardTitle className="text-sm md:text-base">Open Positions</CardTitle>
+          <CardTitle className="text-sm md:text-base">Open Positions for Today</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -411,7 +412,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
           >
             <div className="flex items-center gap-2">
               <span className={`text-xl transition-transform duration-200 ${showClosedPositions ? 'rotate-90' : ''}`}>›</span>
-              <span className="font-medium">Closed Positions</span>
+              <span className="font-medium">Closed Positions for Today</span>
             </div>
             <span className="text-sm text-gray-500">
               {closedPositions.length} position{closedPositions.length !== 1 ? 's' : ''}
@@ -468,47 +469,63 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
       </div>
 
       {/* Orders Table */}
-      <Card className="mt-6 max-h-[40vh] overflow-y-auto">
-        <CardHeader className="p-3 md:p-4 sticky top-0 bg-white z-10">
-          <CardTitle className="text-sm md:text-base">Recent Orders</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="text-xs md:text-sm bg-gray-50">
-                <tr>
-                  <th className="p-2 text-left">Symbol</th>
-                  <th className="p-2 text-left">Side</th>
-                  <th className="p-2 text-left">Qty</th>
-                  <th className="p-2 text-left">Filled Qty</th>
-                  <th className="p-2 text-left">Avg. Fill Price</th>
-                  <th className="p-2 text-left">Status</th>
-                  <th className="p-2 text-left">Submitted At</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-4 text-center text-gray-500">No recent orders</td>
-                  </tr>
-                ) : (
-                  orders.map((order, index) => (
-                    <tr key={index} className="border-t">
-                      <td className="p-2">{order.symbol}</td>
-                      <td className="p-2 capitalize">{order.side}</td>
-                      <td className="p-2">{order.quantity}</td>
-                      <td className="p-2">{order.filledQuantity || '-'}</td>
-                      <td className="p-2">{order.filledAvgPrice ? `$${order.filledAvgPrice.toFixed(2)}` : '-'}</td>
-                      <td className="p-2 capitalize">{order.status}</td>
-                      <td className="p-2">{order.submittedAt.toLocaleString()}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+      <div className="mt-6">
+        <div className="rounded-lg overflow-hidden">
+          <button
+            onClick={() => setShowRecentOrders(!showRecentOrders)}
+            className={`w-full py-3 px-4 transition-colors duration-200 flex items-center justify-between bg-white hover:bg-gray-50 text-gray-700 border border-gray-200`}
+          >
+            <div className="flex items-center gap-2">
+              <span className={`text-xl transition-transform duration-200 ${showRecentOrders ? 'rotate-90' : ''}`}>›</span>
+              <span className="font-medium">Recent Orders</span>
+            </div>
+            <span className="text-sm text-gray-500">
+              {orders.length} order{orders.length !== 1 ? 's' : ''}
+            </span>
+          </button>
+
+          <div className={`transition-all duration-300 ease-in-out ${showRecentOrders ? 'max-h-[60vh] opacity-100' : 'max-h-0 opacity-0'}`}>
+            <Card className="rounded-t-none border-t-0">
+              <CardContent className="p-0">
+                <div className="overflow-y-auto max-h-[60vh]">
+                  <table className="w-full">
+                    <thead className="text-xs md:text-sm bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="p-2 text-left">Symbol</th>
+                        <th className="p-2 text-left">Side</th>
+                        <th className="p-2 text-left">Qty</th>
+                        <th className="p-2 text-left">Filled Qty</th>
+                        <th className="p-2 text-left">Avg. Fill Price</th>
+                        <th className="p-2 text-left">Status</th>
+                        <th className="p-2 text-left">Submitted At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-4 text-center text-gray-500">No recent orders</td>
+                        </tr>
+                      ) : (
+                        orders.map((order, index) => (
+                          <tr key={index} className="border-t">
+                            <td className="p-2">{order.symbol}</td>
+                            <td className="p-2 capitalize">{order.side}</td>
+                            <td className="p-2">{order.quantity}</td>
+                            <td className="p-2">{order.filledQuantity || '-'}</td>
+                            <td className="p-2">{order.filledAvgPrice ? `$${order.filledAvgPrice.toFixed(2)}` : '-'}</td>
+                            <td className="p-2 capitalize">{order.status}</td>
+                            <td className="p-2">{order.submittedAt.toLocaleString()}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 };
