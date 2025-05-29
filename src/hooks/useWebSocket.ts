@@ -28,6 +28,7 @@ export function useWebSocket(
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
+  const isComponentMounted = useRef(true);
 
   useEffect(() => {
     if (!userId) return;
@@ -38,11 +39,17 @@ export function useWebSocket(
     console.log('Attempting WebSocket connection to:', WS_URL);
 
     const connect = () => {
+      if (!isComponentMounted.current) return;
+
       try {
         const ws = new WebSocket(WS_URL);
         wsRef.current = ws;
 
         ws.onopen = () => {
+          if (!isComponentMounted.current) {
+            ws.close();
+            return;
+          }
           console.log('WebSocket connected');
           reconnectAttempts.current = 0;
           ws.send(JSON.stringify({ type: 'subscribe', userId }));
@@ -50,13 +57,14 @@ export function useWebSocket(
 
           // Start heartbeat
           heartbeatRef.current = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
+            if (ws.readyState === WebSocket.OPEN && isComponentMounted.current) {
               ws.send(JSON.stringify({ type: 'ping' }));
             }
           }, 10000);
         };
 
         ws.onmessage = (event) => {
+          if (!isComponentMounted.current) return;
           try {
             const message = JSON.parse(event.data);
             console.log('Websocket event message received:', message.type);
@@ -82,12 +90,14 @@ export function useWebSocket(
         };
 
         ws.onclose = () => {
+          if (!isComponentMounted.current) return;
           console.warn('WebSocket connection closed');
           cleanup();
           scheduleReconnect();
         };
 
         ws.onerror = (err) => {
+          if (!isComponentMounted.current) return;
           console.error('WebSocket error:', err);
           ws.close(); // Triggers `onclose`
         };
@@ -116,10 +126,12 @@ export function useWebSocket(
     };
     
     const scheduleReconnect = () => {
+      if (!isComponentMounted.current) return;
       if (reconnectTimeoutRef.current) return;
-      const delay = Math.min(10000, 1000 * 2 ** reconnectAttempts.current); // exponential backoff up to 10s
+      const delay = Math.min(10000, 1000 * 2 ** reconnectAttempts.current);
       console.log(`Attempting to reconnect in ${delay / 1000}s...`);
       reconnectTimeoutRef.current = setTimeout(() => {
+        if (!isComponentMounted.current) return;
         reconnectAttempts.current += 1;
         reconnectTimeoutRef.current = null;
         connect();
@@ -129,9 +141,12 @@ export function useWebSocket(
     connect();
 
     return () => {
+      isComponentMounted.current = false;
       cleanup();
-      reconnectTimeoutRef.current && clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
     };
-  }, [userId, onPositionUpdate, onStockOrder, onPositionDeletion]); // Reconnect if userId changes or if the callback functions change
+  }, [userId, onPositionUpdate, onStockOrder, onPositionDeletion]);
 }
