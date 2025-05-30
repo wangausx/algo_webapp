@@ -50,7 +50,6 @@ export const useSettings = ({
 
   // Save trade settings
   const saveTradeSetting = async (settings: TradeSetting) => {
- 
     setSaveStatus('saving');
     // Here you would typically make an API call to save the settings
     console.log('Saving trade settings:', settings);
@@ -66,16 +65,18 @@ export const useSettings = ({
         },
         body: JSON.stringify(tradeSetting), // send with `tradeSetting` key
       });
-  
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save tradeSetting');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to save trade settings: ${response.status}`);
       }
-  
+
+      setSaveStatus('success');
       alert('Trade settings saved successfully');
     } catch (error) {
-      console.error('Error saving tradeSetting:', error);
-      throw error; // Let caller handle error
+      console.error('Error saving trade settings:', error);
+      setSaveStatus('error');
+      throw error;
     }
   };
 

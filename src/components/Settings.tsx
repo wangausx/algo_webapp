@@ -383,15 +383,40 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
                     <label className="text-xs md:text-sm">Risk Percentage (%)</label>
                     <input
                       type="number"
-                      value={tradeSetting.riskSettings.riskPercentage}
-                      onChange={(e) => setTradeSetting(prev => ({
-                        ...prev,
-                        riskSettings: { ...prev.riskSettings, riskPercentage: parseFloat(e.target.value) || 0 },
-                      }))}
+                      value={tradeSetting.riskSettings.riskPercentage || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Allow empty input for direct typing
+                        if (value === '') {
+                          setTradeSetting(prev => ({
+                            ...prev,
+                            riskSettings: { ...prev.riskSettings, riskPercentage: 0 },
+                          }));
+                          return;
+                        }
+                        const numValue = parseFloat(value);
+                        // Only update if it's a valid number between 0 and 100
+                        if (!isNaN(numValue) && numValue >= 0 && numValue <= 100) {
+                          setTradeSetting(prev => ({
+                            ...prev,
+                            riskSettings: { ...prev.riskSettings, riskPercentage: numValue },
+                          }));
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // If the field is empty on blur, set it to 0
+                        if (e.target.value === '') {
+                          setTradeSetting(prev => ({
+                            ...prev,
+                            riskSettings: { ...prev.riskSettings, riskPercentage: 0 },
+                          }));
+                        }
+                      }}
                       className="w-full p-2 text-sm md:text-base border rounded-lg"
                       min="0"
                       max="100"
                       step="0.1"
+                      placeholder="Enter risk percentage"
                     />
                   </div>
 

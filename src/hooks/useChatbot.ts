@@ -57,8 +57,8 @@ export const useChatbot = (conversationId: string | null = null) => {
             ...formatMessagesForAPI(previousMessages),
             { role: 'user', content: messageContent }
           ],
-          model: "claude-3-7-sonnet-20250219",
-          max_tokens: 2048,
+          model: "claude-3-7-sonnet-20250219", 
+          max_tokens: 4096,
           response_format: { type: 'markdown' },
           stream: true
         })

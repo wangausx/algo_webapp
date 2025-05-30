@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { useWebSocket, PositionUpdatePayload, OrderUpdatePayload } from '../hooks/useWebSocket';
+
+console.log('Dashboard component imported useWebSocket:', useWebSocket);
 
 export interface OpenPosition {
   symbol: string;
@@ -38,7 +40,7 @@ interface DashboardProps {
   username?: string;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, username = '' }) => {
+const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleTrading, username = '' }) => {
   const [accountBalance, setAccountBalance] = useState(10000);
   const [dailyPnL, setDailyPnL] = useState(0);
   const [positions, setPositions] = useState<OpenPosition[]>([]);
@@ -48,6 +50,8 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
   const [error, setError] = useState<string | null>(null);
   const [showClosedPositions, setShowClosedPositions] = useState(false);
   const [showRecentOrders, setShowRecentOrders] = useState(false);
+
+  console.log('Dashboard rendering with username:', username);
 
   const fetchClosedPositions = useCallback(async () => {
     if (!username) return;
@@ -75,11 +79,11 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
             closedAtDate = new Date(mostRecentTrade.entryDate);
           }
 
-          // Parse numeric values, defaulting to 0 if invalid
-          const exitPrice = Number(entry.exitPrice) || 0;
-          const realizedPl = Number(entry.realizedPl) || 0;
-          const entryPrice = Number(entry.entryPrice) || 0;
-          const quantity = Number(entry.quantity) || 0;
+          // Parse numeric values, using nullish coalescing to handle 0 values correctly
+          const exitPrice = Number(entry.exitPrice) ?? 0;
+          const realizedPl = Number(entry.realizedPl) ?? 0;
+          const entryPrice = Number(entry.entryPrice) ?? 0;
+          const quantity = Number(entry.quantity) ?? 0;
 
           console.log('Parsed values:', {
             symbol: entry.symbol,
@@ -120,8 +124,10 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
     }
   }, [username]);
 
+  // Memoize callbacks to prevent unnecessary re-renders
   const handlePositionUpdate = useCallback((positionUpdate: PositionUpdatePayload['payload']) => {
-    console.log('Position update received: ', positionUpdate);
+    console.log('handlePositionUpdate callback created');
+    console.log('Dashboard received position update:', positionUpdate);
     
     // Refresh account balance and daily P/L
     const refreshAccountData = async () => {
@@ -170,16 +176,26 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
       } else {
         // This is an update to an existing position
         newPositions = [...prev];
-        newPositions[existingPositionIndex] = newPosition;
+        newPositions[existingPositionIndex] = {
+          ...newPositions[existingPositionIndex],
+          ...newPosition,
+          // Ensure we're not losing any existing data
+          quantity: newPosition.quantity || newPositions[existingPositionIndex].quantity,
+          entryPrice: newPosition.entryPrice || newPositions[existingPositionIndex].entryPrice,
+          currentPrice: newPosition.currentPrice ?? newPositions[existingPositionIndex].currentPrice,
+          unrealizedPl: newPosition.unrealizedPl ?? newPositions[existingPositionIndex].unrealizedPl,
+        };
         console.log('Updating existing position in state');
       }
       
       console.log('New positions state:', newPositions);
-      return newPositions;
+      // Force a new array reference to ensure React detects the change
+      return [...newPositions];
     });
   }, [username]);
 
   const handleOrderUpdate = useCallback((orderUpdate: OrderUpdatePayload['payload']) => {
+    console.log('handleOrderUpdate callback created');
     console.log('orderUpdate received: ', orderUpdate);
     setOrders((prev) => {
       const updated = prev.filter((o) => o.symbol !== orderUpdate.symbol || o.status !== 'pending');
@@ -200,6 +216,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
   }, []);
 
   const handlePositionDeletion = useCallback((symbol: string) => {
+    console.log('handlePositionDeletion callback created');
     console.log('Position deletion received for symbol:', symbol);
     setPositions((prev) => {
       // Find the position being closed
@@ -212,8 +229,8 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
           side: closedPosition.side,
           quantity: closedPosition.quantity,
           entryPrice: closedPosition.entryPrice,
-          exitPrice: closedPosition.currentPrice || 0,
-          realizedPl: closedPosition.unrealizedPl || 0,
+          exitPrice: closedPosition.currentPrice ?? 0,  // Use nullish coalescing
+          realizedPl: closedPosition.unrealizedPl ?? 0, // Use nullish coalescing
           closedAt: new Date(),
         };
         
@@ -255,8 +272,15 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
     }
   };
 
-  useWebSocket(username, handlePositionUpdate, handleOrderUpdate, handlePositionDeletion);
+  // Use the WebSocket hook
+  useWebSocket(
+    username,
+    handlePositionUpdate,
+    handleOrderUpdate,
+    handlePositionDeletion
+  );
 
+  // Remove all the old WebSocket connection logic and keep only the data fetching effect
   useEffect(() => {
     const fetchData = async () => {
       if (!username) {
@@ -338,10 +362,20 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
     fetchData();
   }, [username, fetchClosedPositions]);
 
-  // Add a useEffect to log position changes
+  // Add a useEffect to monitor position changes
   useEffect(() => {
     console.log('Positions state updated:', positions);
   }, [positions]);
+
+  // Add a useEffect to monitor account balance changes
+  useEffect(() => {
+    console.log('Account balance updated:', accountBalance);
+  }, [accountBalance]);
+
+  // Add a useEffect to monitor daily P/L changes
+  useEffect(() => {
+    console.log('Daily P/L updated:', dailyPnL);
+  }, [dailyPnL]);
 
   if (!username) {
     return <div>Your trading account is not configured yet! Please set your account and manage your trading allocations under Settings.</div>;
@@ -359,7 +393,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
       </div>
     );
   }
-
+  
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Info Cards */}
@@ -604,6 +638,6 @@ const Dashboard: React.FC<DashboardProps> = ({ tradingStatus, toggleTrading, use
       </div>
     </div>
   );
-};
+});
 
 export default Dashboard;
