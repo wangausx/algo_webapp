@@ -74,7 +74,6 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
     saveTradeSetting,
     addSymbol,
     removeSymbol,
-    updateSymbolConfig
   } = useSettings({
     accountConfig,
     setAccountConfig,

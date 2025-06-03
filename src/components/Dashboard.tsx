@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback} from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { useWebSocket, PositionUpdatePayload, OrderUpdatePayload } from '../hooks/useWebSocket';
 
@@ -616,17 +616,19 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleT
                           <td colSpan={7} className="p-4 text-center text-gray-500">No recent orders</td>
                         </tr>
                       ) : (
-                        orders.map((order, index) => (
-                          <tr key={index} className="border-t">
-                            <td className="p-2">{order.symbol}</td>
-                            <td className="p-2 capitalize">{order.side}</td>
-                            <td className="p-2">{order.quantity}</td>
-                            <td className="p-2">{order.filledQuantity || '-'}</td>
-                            <td className="p-2">{order.filledAvgPrice ? `$${order.filledAvgPrice.toFixed(2)}` : '-'}</td>
-                            <td className="p-2 capitalize">{order.status}</td>
-                            <td className="p-2">{order.submittedAt.toLocaleString()}</td>
-                          </tr>
-                        ))
+                        [...orders]
+                          .sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime())
+                          .map((order, index) => (
+                            <tr key={index} className="border-t">
+                              <td className="p-2">{order.symbol}</td>
+                              <td className="p-2 capitalize">{order.side}</td>
+                              <td className="p-2">{order.quantity}</td>
+                              <td className="p-2">{order.filledQuantity || '-'}</td>
+                              <td className="p-2">{order.filledAvgPrice ? `$${order.filledAvgPrice.toFixed(2)}` : '-'}</td>
+                              <td className="p-2 capitalize">{order.status}</td>
+                              <td className="p-2">{order.submittedAt.toLocaleString()}</td>
+                            </tr>
+                          ))
                       )}
                     </tbody>
                   </table>
