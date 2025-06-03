@@ -31,6 +31,7 @@ export interface StockOrder {
   status: 'pending' | 'filled' | 'partially_filled' | 'canceled' | 'rejected';
   filledAvgPrice?: number;
   submittedAt: Date;
+  filledAt?: Date;
   clientOrderId?: string;
 }
 
@@ -198,7 +199,25 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleT
     console.log('handleOrderUpdate callback created');
     console.log('orderUpdate received: ', orderUpdate);
     setOrders((prev) => {
+      const submittedAt = orderUpdate.submittedAt ? new Date(orderUpdate.submittedAt) : new Date();
+      
+      // Check if this order already exists
+      const isDuplicate = prev.some(
+        o => o.symbol === orderUpdate.symbol &&
+             o.side === orderUpdate.side &&
+             o.quantity === Number(orderUpdate.quantity) &&
+             o.clientOrderId === orderUpdate.clientOrderId &&
+             o.submittedAt?.getTime() === submittedAt.getTime()
+      );
+
+      if (isDuplicate) {
+        console.log('Duplicate order detected, skipping update');
+        return prev;
+      }
+
+      // Remove any pending orders for the same symbol
       const updated = prev.filter((o) => o.symbol !== orderUpdate.symbol || o.status !== 'pending');
+      
       return [
         ...updated,
         {
@@ -208,7 +227,8 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleT
           side: orderUpdate.side,
           status: orderUpdate.status,
           filledAvgPrice: Number(orderUpdate.filledAvgPrice) || undefined,
-          submittedAt: orderUpdate.submittedAt ? new Date(orderUpdate.submittedAt) : new Date(),
+          submittedAt: submittedAt,
+          filledAt: orderUpdate.filledAt ? new Date(orderUpdate.filledAt) : undefined,
           clientOrderId: orderUpdate.clientOrderId,
         } as StockOrder,
       ];
@@ -223,19 +243,38 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleT
       const closedPosition = prev.find((p) => p.symbol === symbol);
       
       if (closedPosition) {
-        // Create a closed position entry
-        const closedPositionEntry: ClosedPosition = {
-          symbol: closedPosition.symbol,
-          side: closedPosition.side,
-          quantity: closedPosition.quantity,
-          entryPrice: closedPosition.entryPrice,
-          exitPrice: closedPosition.currentPrice ?? 0,  // Use nullish coalescing
-          realizedPl: closedPosition.unrealizedPl ?? 0, // Use nullish coalescing
-          closedAt: new Date(),
-        };
-        
-        console.log('Adding closed position:', closedPositionEntry);
-        setClosedPositions(prevClosed => [...prevClosed, closedPositionEntry]);
+        // Check if this position is already in closedPositions
+        setClosedPositions(prevClosed => {
+          const FIVE_MINUTES_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
+          const currentTime = new Date().getTime();
+          
+          const isAlreadyClosed = prevClosed.some(
+            p => p.symbol === closedPosition.symbol && 
+                 p.side === closedPosition.side &&
+                 p.entryPrice === closedPosition.entryPrice &&
+                 p.quantity === closedPosition.quantity &&
+                 p.closedAt && 
+                 Math.abs(p.closedAt.getTime() - currentTime) < FIVE_MINUTES_MS
+          );
+          
+          if (!isAlreadyClosed) {
+            // Create a closed position entry
+            const closedPositionEntry: ClosedPosition = {
+              symbol: closedPosition.symbol,
+              side: closedPosition.side,
+              quantity: closedPosition.quantity,
+              entryPrice: closedPosition.entryPrice,
+              exitPrice: closedPosition.currentPrice ?? 0,  // Use nullish coalescing
+              realizedPl: closedPosition.unrealizedPl ?? 0, // Use nullish coalescing
+              closedAt: new Date(),
+            };
+            
+            console.log('Adding closed position:', closedPositionEntry);
+            return [...prevClosed, closedPositionEntry];
+          }
+          
+          return prevClosed;
+        });
       }
       
       // Remove the position from open positions
@@ -344,6 +383,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleT
             status: order.status,
             filledAvgPrice: Number(order.filledAvgPrice) || undefined,
             submittedAt: order.submittedAt ? new Date(order.submittedAt) : new Date(),
+            filledAt: order.filledAt ? new Date(order.filledAt) : undefined,
             clientOrderId: order.clientOrderId,
           } as StockOrder));
           setOrders(ordersArray);
@@ -467,7 +507,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleT
                   <th className="p-2 text-left">Symbol</th>
                   <th className="p-2 text-left">Side</th>
                   <th className="p-2 text-left">Qty</th>
-                  <th className="p-2 text-left">Entry Price</th>
+                  <th className="p-2 text-left">Avg. Entry Price</th>
                   <th className="p-2 text-left">Current Price</th>
                   <th className="p-2 text-left">Unrealized P/L</th>
                   <th className="p-2 text-left">Actions</th>
@@ -539,8 +579,8 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleT
                         <th className="p-2 text-left">Symbol</th>
                         <th className="p-2 text-left">Side</th>
                         <th className="p-2 text-left">Qty</th>
-                        <th className="p-2 text-left">Entry Price</th>
-                        <th className="p-2 text-left">Exit Price</th>
+                        <th className="p-2 text-left">Avg. Entry Price</th>
+                        <th className="p-2 text-left">Avg. Exit Price</th>
                         <th className="p-2 text-left">Realized P/L</th>
                         <th className="p-2 text-left">Closed At</th>
                       </tr>
@@ -603,17 +643,16 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleT
                       <tr>
                         <th className="p-2 text-left">Symbol</th>
                         <th className="p-2 text-left">Side</th>
-                        <th className="p-2 text-left">Qty</th>
                         <th className="p-2 text-left">Filled Qty</th>
                         <th className="p-2 text-left">Avg. Fill Price</th>
-                        <th className="p-2 text-left">Status</th>
                         <th className="p-2 text-left">Submitted At</th>
+                        <th className="p-2 text-left">Filled At</th>
                       </tr>
                     </thead>
                     <tbody>
                       {orders.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="p-4 text-center text-gray-500">No recent orders</td>
+                          <td colSpan={6} className="p-4 text-center text-gray-500">No recent orders</td>
                         </tr>
                       ) : (
                         [...orders]
@@ -622,11 +661,10 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleT
                             <tr key={index} className="border-t">
                               <td className="p-2">{order.symbol}</td>
                               <td className="p-2 capitalize">{order.side}</td>
-                              <td className="p-2">{order.quantity}</td>
                               <td className="p-2">{order.filledQuantity || '-'}</td>
                               <td className="p-2">{order.filledAvgPrice ? `$${order.filledAvgPrice.toFixed(2)}` : '-'}</td>
-                              <td className="p-2 capitalize">{order.status}</td>
                               <td className="p-2">{order.submittedAt.toLocaleString()}</td>
+                              <td className="p-2">{order.filledAt ? order.filledAt.toLocaleString() : '-'}</td>
                             </tr>
                           ))
                       )}
