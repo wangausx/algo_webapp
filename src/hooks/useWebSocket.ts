@@ -22,7 +22,8 @@ export function useWebSocket(
   userId: string,
   onPositionUpdate: (payload: OpenPosition) => void,
   onStockOrder?: (payload: StockOrder) => void,
-  onPositionDeletion?: (symbol: string) => void
+  onPositionDeletion?: (symbol: string) => void,
+  refreshAccountData?: () => Promise<void>
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -106,6 +107,8 @@ export function useWebSocket(
               case 'position_update':
                 console.log('Handling position update:', message.payload);
                 onPositionUpdate(message.payload);
+                // Refresh account data when position is updated
+                refreshAccountData?.();
                 break;
               case 'order_update':
                 console.log('Handling order update:', message.payload);
@@ -200,5 +203,5 @@ export function useWebSocket(
         reconnectTimeoutRef.current = null;
       }
     };
-  }, [userId, onPositionUpdate, onStockOrder, onPositionDeletion]);
+  }, [userId, onPositionUpdate, onStockOrder, onPositionDeletion, refreshAccountData]);
 }

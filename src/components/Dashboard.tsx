@@ -1,6 +1,10 @@
-import React, { useState, useEffect, useCallback} from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { useWebSocket, PositionUpdatePayload, OrderUpdatePayload } from '../hooks/useWebSocket';
+import { useWebSocket } from '../hooks/useWebSocket';
+import { usePositions } from '../hooks/usePositions';
+import { useOrders } from '../hooks/useOrders';
+import { useAccount } from '../hooks/useAccount';
+import { useDashboardData } from '../hooks/useDashboardData';
 
 console.log('Dashboard component imported useWebSocket:', useWebSocket);
 
@@ -42,380 +46,58 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleTrading, username = '' }) => {
-  const [accountBalance, setAccountBalance] = useState(10000);
-  const [dailyPnL, setDailyPnL] = useState(0);
-  const [positions, setPositions] = useState<OpenPosition[]>([]);
-  const [closedPositions, setClosedPositions] = useState<ClosedPosition[]>([]);
-  const [orders, setOrders] = useState<StockOrder[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // UI state
   const [showClosedPositions, setShowClosedPositions] = useState(false);
   const [showRecentOrders, setShowRecentOrders] = useState(false);
 
-  console.log('Dashboard rendering with username:', username);
+  // Custom hooks
+  const { 
+    positions, 
+    closedPositions, 
+    fetchClosedPositions,
+    handlePositionUpdate, 
+    handlePositionDeletion, 
+    handleCancelPosition 
+  } = usePositions(username);
 
-  const fetchClosedPositions = useCallback(async () => {
-    if (!username) return;
-    
-    try {
-      const closedPositionsRes = await fetch(`http://localhost:3001/router/closed-positions/${username}`);
-      if (closedPositionsRes.ok) {
-        const closedPositionsData = await closedPositionsRes.json();
-        console.log('Raw closed positions data from server:', closedPositionsData);
-        
-        const closedPositionsArray = (Array.isArray(closedPositionsData)
-          ? closedPositionsData
-          : closedPositionsData.positions || []
-        ).map((entry: any) => {
-          console.log('Processing entry:', entry);
-          
-          // Get the most recent trade's entryDate as the closedAt time
-          let closedAtDate: Date | null = null;
-          if (entry.trades && entry.trades.length > 0) {
-            // Sort trades by entryDate in descending order and take the most recent one
-            const sortedTrades = [...entry.trades].sort((a: any, b: any) => 
-              new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()
-            );
-            const mostRecentTrade = sortedTrades[0];
-            closedAtDate = new Date(mostRecentTrade.entryDate);
-          }
+  const { 
+    orders, 
+    handleOrderUpdate,
+    fetchOrders 
+  } = useOrders(username);
 
-          // Parse numeric values, using nullish coalescing to handle 0 values correctly
-          const exitPrice = Number(entry.exitPrice) ?? 0;
-          const realizedPl = Number(entry.realizedPl) ?? 0;
-          const entryPrice = Number(entry.entryPrice) ?? 0;
-          const quantity = Number(entry.quantity) ?? 0;
+  const { 
+    accountBalance, 
+    dailyPnL, 
+    refreshAccountData 
+  } = useAccount(username);
 
-          console.log('Parsed values:', {
-            symbol: entry.symbol,
-            exitPrice,
-            realizedPl,
-            entryPrice,
-            quantity,
-            closedAt: closedAtDate
-          });
+  const { 
+    isLoading, 
+    error, 
+    initializeData 
+  } = useDashboardData(
+    username,
+    fetchClosedPositions,
+    fetchOrders,
+    refreshAccountData
+  );
 
-          return {
-            symbol: entry.symbol,
-            side: entry.side,
-            quantity: quantity,
-            entryPrice: entryPrice,
-            exitPrice: exitPrice,
-            realizedPl: realizedPl,
-            closedAt: closedAtDate,
-          } as ClosedPosition;
-        }).filter((position: ClosedPosition) => {
-          // Only filter out positions with missing essential data
-          const hasEssentialData = position.symbol && position.side;
-          
-          if (!hasEssentialData) {
-            console.warn('Filtering out position missing essential data:', position);
-          }
-          
-          return hasEssentialData;
-        });
-        
-        console.log('Final processed closed positions:', closedPositionsArray);
-        setClosedPositions(closedPositionsArray);
-      } else {
-        console.log('No closed positions yet!');
-      }
-    } catch (error) {
-      console.error('Error fetching closed positions:', error);
-    }
-  }, [username]);
-
-  // Memoize callbacks to prevent unnecessary re-renders
-  const handlePositionUpdate = useCallback((positionUpdate: PositionUpdatePayload['payload']) => {
-    console.log('handlePositionUpdate callback created');
-    console.log('Dashboard received position update:', positionUpdate);
-    
-    // Refresh account balance and daily P/L
-    const refreshAccountData = async () => {
-      try {
-        const accountRes = await fetch(`http://localhost:3001/router/account/${username}`);
-        if (!accountRes.ok) {
-          throw new Error(`Failed to fetch account data: ${accountRes.status}`);
-        }
-        
-        const accountData = await accountRes.json();
-        setAccountBalance(Number(accountData.balance) || 0);
-        setDailyPnL(Number(accountData.dailyPnL) || 0);
-        console.log('Account data refreshed:', accountData);
-      } catch (error) {
-        console.error('Error refreshing account data:', error);
-      }
-    };
-    
-    refreshAccountData();
-    
-    setPositions((prev) => {
-      console.log('Previous positions state:', prev);
-      
-      // Check if this is a new position or an update to an existing one
-      const existingPositionIndex = prev.findIndex(
-        (p) => p.symbol === positionUpdate.symbol && p.side === positionUpdate.side
-      );
-      
-      const newPosition = {
-        symbol: positionUpdate.symbol,
-        side: positionUpdate.side,
-        quantity: Math.abs(Number(positionUpdate.quantity)), // Ensure positive quantity
-        entryPrice: Number(positionUpdate.entryPrice) || 0,
-        currentPrice: positionUpdate.currentPrice != null ? Number(positionUpdate.currentPrice) : null,
-        unrealizedPl: positionUpdate.unrealizedPl != null ? Number(positionUpdate.unrealizedPl) : 0,
-      } as OpenPosition;
-      
-      console.log('Position update type:', existingPositionIndex === -1 ? 'New position' : 'Update existing position');
-      console.log('Position data:', newPosition);
-      
-      let newPositions;
-      if (existingPositionIndex === -1) {
-        // This is a new position
-        newPositions = [...prev, newPosition];
-        console.log('Adding new position to state');
-      } else {
-        // This is an update to an existing position
-        newPositions = [...prev];
-        newPositions[existingPositionIndex] = {
-          ...newPositions[existingPositionIndex],
-          ...newPosition,
-          // Ensure we're not losing any existing data
-          quantity: newPosition.quantity || newPositions[existingPositionIndex].quantity,
-          entryPrice: newPosition.entryPrice || newPositions[existingPositionIndex].entryPrice,
-          currentPrice: newPosition.currentPrice ?? newPositions[existingPositionIndex].currentPrice,
-          unrealizedPl: newPosition.unrealizedPl ?? newPositions[existingPositionIndex].unrealizedPl,
-        };
-        console.log('Updating existing position in state');
-      }
-      
-      console.log('New positions state:', newPositions);
-      // Force a new array reference to ensure React detects the change
-      return [...newPositions];
-    });
-  }, [username]);
-
-  const handleOrderUpdate = useCallback((orderUpdate: OrderUpdatePayload['payload']) => {
-    console.log('handleOrderUpdate callback created');
-    console.log('orderUpdate received: ', orderUpdate);
-    setOrders((prev) => {
-      const submittedAt = orderUpdate.submittedAt ? new Date(orderUpdate.submittedAt) : new Date();
-      
-      // Check if this order already exists
-      const isDuplicate = prev.some(
-        o => o.symbol === orderUpdate.symbol &&
-             o.side === orderUpdate.side &&
-             o.quantity === Number(orderUpdate.quantity) &&
-             o.clientOrderId === orderUpdate.clientOrderId &&
-             o.submittedAt?.getTime() === submittedAt.getTime()
-      );
-
-      if (isDuplicate) {
-        console.log('Duplicate order detected, skipping update');
-        return prev;
-      }
-
-      // Remove any pending orders for the same symbol
-      const updated = prev.filter((o) => o.symbol !== orderUpdate.symbol || o.status !== 'pending');
-      
-      return [
-        ...updated,
-        {
-          symbol: orderUpdate.symbol,
-          quantity: Number(orderUpdate.quantity) || 0,
-          filledQuantity: Number(orderUpdate.filledQuantity) || 0,
-          side: orderUpdate.side,
-          status: orderUpdate.status,
-          filledAvgPrice: Number(orderUpdate.filledAvgPrice) || undefined,
-          submittedAt: submittedAt,
-          filledAt: orderUpdate.filledAt ? new Date(orderUpdate.filledAt) : undefined,
-          clientOrderId: orderUpdate.clientOrderId,
-        } as StockOrder,
-      ];
-    });
-  }, []);
-
-  const handlePositionDeletion = useCallback((symbol: string) => {
-    console.log('handlePositionDeletion callback created');
-    console.log('Position deletion received for symbol:', symbol);
-    setPositions((prev) => {
-      // Find the position being closed
-      const closedPosition = prev.find((p) => p.symbol === symbol);
-      
-      if (closedPosition) {
-        // Check if this position is already in closedPositions
-        setClosedPositions(prevClosed => {
-          const FIVE_MINUTES_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
-          const currentTime = new Date().getTime();
-          
-          const isAlreadyClosed = prevClosed.some(
-            p => p.symbol === closedPosition.symbol && 
-                 p.side === closedPosition.side &&
-                 p.entryPrice === closedPosition.entryPrice &&
-                 p.quantity === closedPosition.quantity &&
-                 p.closedAt && 
-                 Math.abs(p.closedAt.getTime() - currentTime) < FIVE_MINUTES_MS
-          );
-          
-          if (!isAlreadyClosed) {
-            // Create a closed position entry
-            const closedPositionEntry: ClosedPosition = {
-              symbol: closedPosition.symbol,
-              side: closedPosition.side,
-              quantity: closedPosition.quantity,
-              entryPrice: closedPosition.entryPrice,
-              exitPrice: closedPosition.currentPrice ?? 0,  // Use nullish coalescing
-              realizedPl: closedPosition.unrealizedPl ?? 0, // Use nullish coalescing
-              closedAt: new Date(),
-            };
-            
-            console.log('Adding closed position:', closedPositionEntry);
-            return [...prevClosed, closedPositionEntry];
-          }
-          
-          return prevClosed;
-        });
-      }
-      
-      // Remove the position from open positions
-      const updated = prev.filter((p) => p.symbol !== symbol);
-      console.log('Updated open positions after deletion:', updated);
-      return updated;
-    });
-  }, []);
-
-  const handleClosePosition = async (symbol: string, side: 'long' | 'short') => {
-    if (!username) return;
-    
-    try {
-      const response = await fetch(`http://localhost:3001/router/cancel-position/${username}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          symbol,
-          side,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to close position');
-      }
-
-      // The position will be removed via the WebSocket update
-      console.log(`Position close request sent for ${symbol} (${side})`);
-    } catch (error) {
-      console.error('Error closing position:', error);
-      setError(error instanceof Error ? error.message : 'Failed to close position');
-    }
-  };
-
-  // Use the WebSocket hook
+  // WebSocket connection
   useWebSocket(
     username,
     handlePositionUpdate,
     handleOrderUpdate,
-    handlePositionDeletion
+    handlePositionDeletion,
+    refreshAccountData
   );
 
-  // Remove all the old WebSocket connection logic and keep only the data fetching effect
+  // Initial data fetch
   useEffect(() => {
-    const fetchData = async () => {
-      if (!username) {
-        setIsLoading(false);
-        console.log('Username is empty or null. Skipping data fetch.');
-        return;
-      }
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        // Fetch account balance
-        const accountRes = await fetch(`http://localhost:3001/router/account/${username}`);
-        if (!accountRes.ok) {
-          throw new Error(`Failed to fetch account data: ${accountRes.status}`);
-        }
-        
-        const accountData = await accountRes.json();
-        setAccountBalance(Number(accountData.balance) || 0);
-        setDailyPnL(Number(accountData.dailyPnL) || 0);
-        console.log('Account balance fetched: ', accountData.balance, accountData.dailyPnL);
-
-        // Fetch initial positions
-        const positionRes = await fetch(`http://localhost:3001/router/positions/${username}`);
-        if (positionRes.ok) {
-          const positionData = await positionRes.json();
-          console.log('Open positions retrieved: ', positionData);
-          const positionArray = (Array.isArray(positionData)
-            ? positionData
-            : positionData.positions || []
-          ).map((entry: any) => ({
-            symbol: entry.symbol,
-            side: entry.side,
-            quantity: Number(entry.quantity) || 0,
-            entryPrice: Number(entry.avgEntryPrice) || 0,
-            currentPrice: entry.currentPrice != null ? Number(entry.currentPrice) : null,
-            unrealizedPl: entry.unrealizedPl != null ? Number(entry.unrealizedPl) : 0,
-          } as OpenPosition));
-          
-          setPositions(positionArray);
-        } else {
-          console.log('No open positions yet!');
-        }
-
-        // Fetch initial closed positions
-        await fetchClosedPositions();
-
-        // Fetch orders
-        const ordersRes = await fetch(`http://localhost:3001/router/orders/${username}`);
-        if (ordersRes.ok) {
-          const ordersData = await ordersRes.json();
-          console.log('Recent orders retrieved: ', ordersData);
-          const ordersArray = (Array.isArray(ordersData)
-            ? ordersData
-            : ordersData.orders || []
-          ).map((order: any) => ({
-            symbol: order.symbol,
-            quantity: Number(order.quantity) || 0,
-            filledQuantity: Number(order.filledQuantity) || undefined,
-            side: order.side,
-            status: order.status,
-            filledAvgPrice: Number(order.filledAvgPrice) || undefined,
-            submittedAt: order.submittedAt ? new Date(order.submittedAt) : new Date(),
-            filledAt: order.filledAt ? new Date(order.filledAt) : undefined,
-            clientOrderId: order.clientOrderId,
-          } as StockOrder));
-          setOrders(ordersArray);
-        } else {
-          console.log('No orders found.');
-        }
-
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        setError(error instanceof Error ? error.message : 'An unknown error occurred');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [username, fetchClosedPositions]);
-
-  // Add a useEffect to monitor position changes
-  useEffect(() => {
-    console.log('Positions state updated:', positions);
-  }, [positions]);
-
-  // Add a useEffect to monitor account balance changes
-  useEffect(() => {
-    console.log('Account balance updated:', accountBalance);
-  }, [accountBalance]);
-
-  // Add a useEffect to monitor daily P/L changes
-  useEffect(() => {
-    console.log('Daily P/L updated:', dailyPnL);
-  }, [dailyPnL]);
+    if (username) {
+      initializeData();
+    }
+  }, [username, initializeData]);
 
   if (!username) {
     return <div>Your trading account is not configured yet! Please set your account and manage your trading allocations under Settings.</div>;
@@ -537,7 +219,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleT
                       </td>
                       <td className="p-2">
                         <button
-                          onClick={() => handleClosePosition(position.symbol, position.side)}
+                          onClick={() => handleCancelPosition(position.symbol, position.side)}
                           className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors"
                           title="Close position"
                         >
