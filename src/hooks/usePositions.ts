@@ -14,36 +14,10 @@ export const usePositions = (username: string) => {
         const closedPositionsData = await closedPositionsRes.json();
         console.log('Raw closed positions data from server:', closedPositionsData);
         
-        const closedPositionsArray = (Array.isArray(closedPositionsData)
-          ? closedPositionsData
-          : closedPositionsData.positions || []
-        ).map((entry: any) => {
-          console.log('Processing entry:', entry);
-          
-          let closedAtDate: Date | null = null;
-          if (entry.trades && entry.trades.length > 0) {
-            const sortedTrades = [...entry.trades].sort((a: any, b: any) => 
-              new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()
-            );
-            const mostRecentTrade = sortedTrades[0];
-            closedAtDate = new Date(mostRecentTrade.entryDate);
-          }
-
-          const exitPrice = Number(entry.exitPrice) ?? 0;
-          const realizedPl = Number(entry.realizedPl) ?? 0;
-          const entryPrice = Number(entry.entryPrice) ?? 0;
-          const quantity = Number(entry.quantity) ?? 0;
-
-          return {
-            symbol: entry.symbol,
-            side: entry.side,
-            quantity: quantity,
-            entryPrice: entryPrice,
-            exitPrice: exitPrice,
-            realizedPl: realizedPl,
-            closedAt: closedAtDate,
-          } as ClosedPosition;
-        }).filter((position: ClosedPosition) => {
+        const closedPositionsArray = closedPositionsData.map((entry: any) => ({
+          ...entry,
+          closedAt: entry.closedAt ? new Date(entry.closedAt) : null,
+        })).filter((position: ClosedPosition) => {
           const hasEssentialData = position.symbol && position.side;
           if (!hasEssentialData) {
             console.warn('Filtering out position missing essential data:', position);
