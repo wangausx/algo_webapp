@@ -5,6 +5,10 @@ import Settings, { AccountConfig } from './components/Settings';
 import Dashboard from './components/Dashboard'; 
 import { useChatbot } from './hooks/useChatbot';
 import { useTrading } from './hooks/useTrading';
+import { useWebSocket } from './hooks/useWebSocket';
+import { usePositions } from './hooks/usePositions';
+import { useOrders } from './hooks/useOrders';
+import { useAccount } from './hooks/useAccount';
 
 const AlgoTradingApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -31,6 +35,34 @@ const AlgoTradingApp: React.FC = () => {
   });
 
   const { tradingStatus, toggleTrading } = useTrading(accountConfig.username);
+
+  // Initialize hooks that need to be available app-wide
+  const { 
+    positions,
+    closedPositions,
+    handlePositionUpdate, 
+    handlePositionDeletion,
+    fetchClosedPositions,
+    handleCancelPosition
+  } = usePositions(accountConfig.username);
+
+  const { 
+    handleOrderUpdate,
+    fetchOrders 
+  } = useOrders(accountConfig.username);
+
+  const { 
+    refreshAccountData 
+  } = useAccount(accountConfig.username);
+
+  // WebSocket connection at app level
+  useWebSocket(
+    accountConfig.username,
+    handlePositionUpdate,
+    handleOrderUpdate,
+    handlePositionDeletion,
+    refreshAccountData
+  );
 
   const handleNewChat = () => {
     setCurrentConversationId(null);
@@ -87,7 +119,11 @@ const AlgoTradingApp: React.FC = () => {
           <Dashboard 
             tradingStatus={tradingStatus}
             toggleTrading={toggleTrading}
-            username={accountConfig.username} // Pass username prop here
+            username={accountConfig.username}
+            positions={positions}
+            closedPositions={closedPositions}
+            handleCancelPosition={handleCancelPosition}
+            fetchClosedPositions={fetchClosedPositions}
           />
         )}
 

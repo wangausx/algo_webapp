@@ -5,6 +5,45 @@ export const usePositions = (username: string) => {
   const [positions, setPositions] = useState<OpenPosition[]>([]);
   const [closedPositions, setClosedPositions] = useState<ClosedPosition[]>([]);
 
+  const fetchInitialPositions = useCallback(async () => {
+    if (!username) return;
+    
+    try {
+      const positionRes = await fetch(`http://localhost:3001/router/positions/${username}`);
+      if (positionRes.ok) {
+        const positionData = await positionRes.json();
+        console.log('Open positions retrieved: ', positionData);
+        const positionArray = (Array.isArray(positionData)
+          ? positionData
+          : positionData.positions || []
+        ).map((entry: any) => ({
+          symbol: entry.symbol,
+          side: entry.side,
+          quantity: Number(entry.quantity) || 0,
+          entryPrice: Number(entry.avgEntryPrice) || 0,
+          currentPrice: entry.currentPrice != null ? Number(entry.currentPrice) : null,
+          unrealizedPl: entry.unrealizedPl != null ? Number(entry.unrealizedPl) : 0,
+        } as OpenPosition));
+        
+        setPositions(positionArray);
+        return positionArray;
+      } else {
+        console.log('No open positions yet!');
+        return [];
+      }
+    } catch (error) {
+      console.error('Error fetching initial positions:', error);
+      return [];
+    }
+  }, [username]);
+
+  // Fetch initial positions when username changes
+  useEffect(() => {
+    if (username) {
+      fetchInitialPositions();
+    }
+  }, [username, fetchInitialPositions]);
+
   const fetchClosedPositions = useCallback(async () => {
     if (!username) return;
     
@@ -16,6 +55,8 @@ export const usePositions = (username: string) => {
         
         const closedPositionsArray = closedPositionsData.map((entry: any) => ({
           ...entry,
+          // The backend provides UTC dates, so we create a Date object which will automatically
+          // convert to local timezone when displayed
           closedAt: entry.closedAt ? new Date(entry.closedAt) : null,
         })).filter((position: ClosedPosition) => {
           const hasEssentialData = position.symbol && position.side;

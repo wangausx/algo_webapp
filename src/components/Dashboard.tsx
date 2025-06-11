@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { useWebSocket } from '../hooks/useWebSocket';
-import { usePositions } from '../hooks/usePositions';
 import { useOrders } from '../hooks/useOrders';
 import { useAccount } from '../hooks/useAccount';
 import { useDashboardData } from '../hooks/useDashboardData';
-
-console.log('Dashboard component imported useWebSocket:', useWebSocket);
 
 export interface OpenPosition {
   symbol: string;
@@ -43,22 +39,24 @@ interface DashboardProps {
   tradingStatus: 'running' | 'stopped';
   toggleTrading: () => void;
   username?: string;
+  positions: OpenPosition[];
+  closedPositions: ClosedPosition[];
+  handleCancelPosition: (symbol: string, side: 'long' | 'short') => Promise<void>;
+  fetchClosedPositions: () => Promise<void>;
 }
 
-const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleTrading, username = '' }) => {
+const Dashboard: React.FC<DashboardProps> = React.memo(({ 
+  tradingStatus, 
+  toggleTrading, 
+  username = '',
+  positions,
+  closedPositions,
+  handleCancelPosition,
+  fetchClosedPositions
+}) => {
   // UI state
   const [showClosedPositions, setShowClosedPositions] = useState(false);
   const [showRecentOrders, setShowRecentOrders] = useState(false);
-
-  // Custom hooks
-  const { 
-    positions, 
-    closedPositions, 
-    fetchClosedPositions,
-    handlePositionUpdate, 
-    handlePositionDeletion, 
-    handleCancelPosition 
-  } = usePositions(username);
 
   const { 
     orders, 
@@ -80,15 +78,6 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleT
     username,
     fetchClosedPositions,
     fetchOrders,
-    refreshAccountData
-  );
-
-  // WebSocket connection
-  useWebSocket(
-    username,
-    handlePositionUpdate,
-    handleOrderUpdate,
-    handlePositionDeletion,
     refreshAccountData
   );
 
@@ -287,7 +276,9 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({ tradingStatus, toggleT
                               }`}>
                                 ${position.realizedPl.toFixed(2)}
                               </td>
-                              <td className="p-2">{position.closedAt ? position.closedAt.toLocaleString() : 'Unknown'}</td>
+                              <td className="p-2">{position.closedAt ? position.closedAt.toLocaleString(undefined, {
+                                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                              }) : 'Unknown'}</td>
                             </tr>
                           ))
                       )}
