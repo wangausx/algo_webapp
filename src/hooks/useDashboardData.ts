@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { OpenPosition } from '../components/Dashboard';
 
 export const useDashboardData = (
@@ -40,6 +40,8 @@ export const useDashboardData = (
         } as OpenPosition));
         
         setInitialPositions(positionArray);
+        // Refresh account data when positions are updated
+        await refreshAccountData();
         return positionArray;
       } else {
         console.log('No open positions yet!');
@@ -52,7 +54,7 @@ export const useDashboardData = (
     } finally {
       setIsLoading(false);
     }
-  }, [username]);
+  }, [username, refreshAccountData]);
 
   const fetchAllData = useCallback(async () => {
     try {

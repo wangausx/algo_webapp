@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { useOrders } from '../hooks/useOrders';
-import { useAccount } from '../hooks/useAccount';
 import { useDashboardData } from '../hooks/useDashboardData';
 
 export interface OpenPosition {
@@ -41,8 +40,13 @@ interface DashboardProps {
   username?: string;
   positions: OpenPosition[];
   closedPositions: ClosedPosition[];
+  handlePositionUpdate: (position: OpenPosition) => void;
+  handlePositionDeletion: (symbol: string) => void;
   handleCancelPosition: (symbol: string, side: 'long' | 'short') => Promise<void>;
   fetchClosedPositions: () => Promise<void>;
+  accountBalance: number;
+  dailyPnL: number;
+  refreshAccountData: () => Promise<void>;
 }
 
 const Dashboard: React.FC<DashboardProps> = React.memo(({ 
@@ -51,24 +55,24 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
   username = '',
   positions,
   closedPositions,
+  handlePositionUpdate,
+  handlePositionDeletion,
   handleCancelPosition,
-  fetchClosedPositions
+  fetchClosedPositions,
+  accountBalance,
+  dailyPnL,
+  refreshAccountData
 }) => {
   // UI state
   const [showClosedPositions, setShowClosedPositions] = useState(false);
   const [showRecentOrders, setShowRecentOrders] = useState(false);
+  const [showStopConfirmation, setShowStopConfirmation] = useState(false);
 
   const { 
     orders, 
     handleOrderUpdate,
     fetchOrders 
   } = useOrders(username);
-
-  const { 
-    accountBalance, 
-    dailyPnL, 
-    refreshAccountData 
-  } = useAccount(username);
 
   const { 
     isLoading, 
@@ -80,6 +84,19 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
     fetchOrders,
     refreshAccountData
   );
+
+  const handleStopTrading = () => {
+    if (positions.length > 0) {
+      setShowStopConfirmation(true);
+    } else {
+      toggleTrading();
+    }
+  };
+
+  const handleConfirmStop = () => {
+    setShowStopConfirmation(false);
+    toggleTrading();
+  };
 
   // Initial data fetch
   useEffect(() => {
@@ -107,6 +124,31 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
   
   return (
     <div className="space-y-4 md:space-y-6">
+      {/* Stop Trading Confirmation Modal */}
+      {showStopConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Cannot Stop Trading</h3>
+            <p className="text-gray-600 mb-4">
+              You have {positions.length} open position{positions.length !== 1 ? 's' : ''}. Please close all open positions manually before stopping trading.
+            </p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+              <p className="text-yellow-800 text-sm">
+                To close positions, use the "✕" button next to each position in the Open Positions table.
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowStopConfirmation(false)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
         <Card className="w-full">
@@ -123,7 +165,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
                 {tradingStatus.charAt(0).toUpperCase() + tradingStatus.slice(1)}
               </span>
               <button
-                onClick={toggleTrading}
+                onClick={tradingStatus === 'running' ? handleStopTrading : toggleTrading}
                 className={`px-3 py-2 md:px-4 md:py-2 text-sm rounded-lg text-white ${
                   tradingStatus === 'running'
                     ? 'bg-red-500 hover:bg-red-600'

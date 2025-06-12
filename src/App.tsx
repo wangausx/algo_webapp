@@ -36,6 +36,12 @@ const AlgoTradingApp: React.FC = () => {
 
   const { tradingStatus, toggleTrading } = useTrading(accountConfig.username);
 
+  const { 
+    accountBalance,
+    dailyPnL,
+    refreshAccountData 
+  } = useAccount(accountConfig.username);
+
   // Initialize hooks that need to be available app-wide
   const { 
     positions,
@@ -50,10 +56,6 @@ const AlgoTradingApp: React.FC = () => {
     handleOrderUpdate,
     fetchOrders 
   } = useOrders(accountConfig.username);
-
-  const { 
-    refreshAccountData 
-  } = useAccount(accountConfig.username);
 
   // WebSocket connection at app level
   useWebSocket(
@@ -116,14 +118,19 @@ const AlgoTradingApp: React.FC = () => {
 
       <div className="flex-1 p-4 md:p-8 overflow-auto">
         {activeTab === 'dashboard' && (
-          <Dashboard 
+          <Dashboard
             tradingStatus={tradingStatus}
             toggleTrading={toggleTrading}
             username={accountConfig.username}
             positions={positions}
             closedPositions={closedPositions}
+            handlePositionUpdate={handlePositionUpdate}
+            handlePositionDeletion={handlePositionDeletion}
             handleCancelPosition={handleCancelPosition}
             fetchClosedPositions={fetchClosedPositions}
+            accountBalance={accountBalance}
+            dailyPnL={dailyPnL}
+            refreshAccountData={refreshAccountData}
           />
         )}
 
