@@ -50,21 +50,29 @@ const AlgoTradingApp: React.FC = () => {
     handlePositionDeletion,
     fetchClosedPositions,
     handleCancelPosition
-  } = usePositions(accountConfig.username);
+  } = usePositions(accountConfig.username, refreshAccountData);
 
-  const { 
-    handleOrderUpdate,
-    fetchOrders 
-  } = useOrders(accountConfig.username);
+  // Only keep handleOrderUpdate for WebSocket
+  const { handleOrderUpdate } = useOrders(accountConfig.username);
 
   // WebSocket connection at app level
+  console.log('Setting up WebSocket connection for user:', accountConfig.username);
   useWebSocket(
     accountConfig.username,
     handlePositionUpdate,
     handleOrderUpdate,
-    handlePositionDeletion,
-    refreshAccountData
+    handlePositionDeletion
   );
+
+  // Log when callbacks are recreated
+  useEffect(() => {
+    console.log('App component callbacks recreated:', {
+      hasPositionUpdate: !!handlePositionUpdate,
+      hasOrderUpdate: !!handleOrderUpdate,
+      hasPositionDeletion: !!handlePositionDeletion,
+      timestamp: new Date().toISOString()
+    });
+  }, [handlePositionUpdate, handleOrderUpdate, handlePositionDeletion]);
 
   const handleNewChat = () => {
     setCurrentConversationId(null);
@@ -124,8 +132,6 @@ const AlgoTradingApp: React.FC = () => {
             username={accountConfig.username}
             positions={positions}
             closedPositions={closedPositions}
-            handlePositionUpdate={handlePositionUpdate}
-            handlePositionDeletion={handlePositionDeletion}
             handleCancelPosition={handleCancelPosition}
             fetchClosedPositions={fetchClosedPositions}
             accountBalance={accountBalance}

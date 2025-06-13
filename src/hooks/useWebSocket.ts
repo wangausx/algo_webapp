@@ -18,12 +18,17 @@ export interface PositionDeletionPayload {
   };
 }
 
+export interface WarningPayload {
+  type: 'warning';
+  message: string;
+}
+
 export function useWebSocket(
   userId: string,
   onPositionUpdate: (payload: OpenPosition) => void,
   onStockOrder?: (payload: StockOrder) => void,
   onPositionDeletion?: (symbol: string) => void,
-  refreshAccountData?: () => Promise<void>
+  onWarning?: (message: string) => void
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -31,6 +36,21 @@ export function useWebSocket(
   const reconnectAttempts = useRef(0);
   const isConnecting = useRef(false);
   const isSubscribed = useRef(false);
+
+  // Add logging for dependency changes
+  useEffect(() => {
+    // Only log if we don't have an active connection
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.log('WebSocket hook dependencies changed, checking connection status:', {
+        userId,
+        hasPositionUpdate: !!onPositionUpdate,
+        hasStockOrder: !!onStockOrder,
+        hasPositionDeletion: !!onPositionDeletion,
+        hasWarning: !!onWarning,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [userId, onPositionUpdate, onStockOrder, onPositionDeletion, onWarning]);
 
   useEffect(() => {
     if (!userId) {
@@ -107,16 +127,23 @@ export function useWebSocket(
               case 'position_update':
                 console.log('Handling position update:', message.payload);
                 onPositionUpdate(message.payload);
-                // Refresh account data when position is updated
-                refreshAccountData?.();
                 break;
               case 'order_update':
                 console.log('Handling order update:', message.payload);
-                onStockOrder?.(message.payload);
+                if (onStockOrder) {
+                  console.log('Calling onStockOrder callback with payload:', message.payload);
+                  onStockOrder(message.payload);
+                } else {
+                  console.warn('onStockOrder callback is not provided');
+                }
                 break;
               case 'position_deletion':
                 console.log('Handling position deletion:', message.payload);
                 onPositionDeletion?.(message.payload.symbol);
+                break;
+              case 'warning':
+                console.log('Received warning:', message.message);
+                onWarning?.(message.message);
                 break;
               case 'pong':
                 console.log('Received pong response');
@@ -136,11 +163,64 @@ export function useWebSocket(
           console.warn('WebSocket connection closed:', {
             code: event.code,
             reason: event.reason,
-            wasClean: event.wasClean
+            wasClean: event.wasClean,
+            timestamp: new Date().toISOString()
           });
+          
+          // Log specific close codes
+          switch (event.code) {
+            case 1000:
+              console.log('Normal closure');
+              break;
+            case 1001:
+              console.log('Going away - endpoint is going away');
+              break;
+            case 1002:
+              console.log('Protocol error');
+              break;
+            case 1003:
+              console.log('Unsupported data');
+              break;
+            case 1005:
+              console.log('No status received');
+              break;
+            case 1006:
+              console.log('Abnormal closure');
+              break;
+            case 1007:
+              console.log('Invalid frame payload data');
+              break;
+            case 1008:
+              console.log('Policy violation');
+              break;
+            case 1009:
+              console.log('Message too big');
+              break;
+            case 1010:
+              console.log('Missing extension');
+              break;
+            case 1011:
+              console.log('Internal error');
+              break;
+            case 1012:
+              console.log('Service restart');
+              break;
+            case 1013:
+              console.log('Try again later');
+              break;
+            case 1014:
+              console.log('Bad gateway');
+              break;
+            case 1015:
+              console.log('TLS handshake');
+              break;
+            default:
+              console.log('Unknown close code');
+          }
           
           // Only attempt reconnect if not cleanly closed
           if (!event.wasClean) {
+            console.log('Connection was not cleanly closed, attempting to reconnect...');
             cleanup();
             scheduleReconnect();
           }
@@ -149,7 +229,11 @@ export function useWebSocket(
         ws.onerror = (err) => {
           clearTimeout(connectionTimeout);
           isConnecting.current = false;
-          console.error('WebSocket error:', err);
+          console.error('WebSocket error:', {
+            error: err,
+            timestamp: new Date().toISOString(),
+            readyState: ws.readyState
+          });
           ws.close(); // Triggers `onclose`
         };
       } catch (err) {
@@ -203,5 +287,5 @@ export function useWebSocket(
         reconnectTimeoutRef.current = null;
       }
     };
-  }, [userId, onPositionUpdate, onStockOrder, onPositionDeletion, refreshAccountData]);
+  }, [userId, onPositionUpdate, onStockOrder, onPositionDeletion, onWarning]);
 }

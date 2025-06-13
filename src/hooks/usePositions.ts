@@ -1,7 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
 import { OpenPosition, ClosedPosition } from '../components/Dashboard';
 
-export const usePositions = (username: string) => {
+export const usePositions = (
+  username: string,
+  refreshAccountData?: () => Promise<void>
+) => {
   const [positions, setPositions] = useState<OpenPosition[]>([]);
   const [closedPositions, setClosedPositions] = useState<ClosedPosition[]>([]);
 
@@ -119,7 +122,10 @@ export const usePositions = (username: string) => {
       console.log('New positions state:', newPositions);
       return [...newPositions];
     });
-  }, []);
+
+    // Refresh account data after position update
+    refreshAccountData?.();
+  }, [refreshAccountData]);
 
   const handlePositionDeletion = useCallback((symbol: string) => {
     console.log('handlePositionDeletion callback created');
@@ -161,13 +167,15 @@ export const usePositions = (username: string) => {
 
         // Refresh closed positions from server after local update
         fetchClosedPositions();
+        // Refresh account data after position deletion
+        refreshAccountData?.();
       }
       
       const updated = prev.filter((p) => p.symbol !== symbol);
       console.log('Updated open positions after deletion:', updated);
       return updated;
     });
-  }, [fetchClosedPositions]);
+  }, [fetchClosedPositions, refreshAccountData]);
 
   const handleCancelPosition = useCallback(async (symbol: string, side: 'long' | 'short') => {
     if (!username) return;

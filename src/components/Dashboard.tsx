@@ -40,8 +40,6 @@ interface DashboardProps {
   username?: string;
   positions: OpenPosition[];
   closedPositions: ClosedPosition[];
-  handlePositionUpdate: (position: OpenPosition) => void;
-  handlePositionDeletion: (symbol: string) => void;
   handleCancelPosition: (symbol: string, side: 'long' | 'short') => Promise<void>;
   fetchClosedPositions: () => Promise<void>;
   accountBalance: number;
@@ -55,8 +53,6 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
   username = '',
   positions,
   closedPositions,
-  handlePositionUpdate,
-  handlePositionDeletion,
   handleCancelPosition,
   fetchClosedPositions,
   accountBalance,
@@ -70,7 +66,6 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
 
   const { 
     orders, 
-    handleOrderUpdate,
     fetchOrders 
   } = useOrders(username);
 
@@ -91,11 +86,6 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
     } else {
       toggleTrading();
     }
-  };
-
-  const handleConfirmStop = () => {
-    setShowStopConfirmation(false);
-    toggleTrading();
   };
 
   // Initial data fetch

@@ -7,6 +7,7 @@ export const useOrders = (username: string) => {
   const handleOrderUpdate = useCallback((orderUpdate: StockOrder) => {
     console.log('handleOrderUpdate callback created');
     console.log('orderUpdate received: ', orderUpdate);
+    console.log('Current orders state before update:', orders);
     setOrders((prev) => {
       const submittedAt = orderUpdate.submittedAt ? new Date(orderUpdate.submittedAt) : new Date();
       const filledAt = orderUpdate.filledAt ? new Date(orderUpdate.filledAt) : undefined;
@@ -29,20 +30,22 @@ export const useOrders = (username: string) => {
       // Remove any pending orders for the same symbol
       const updated = prev.filter((o) => o.symbol !== orderUpdate.symbol || o.status !== 'pending');
       
-      return [
-        ...updated,
-        {
-          symbol: orderUpdate.symbol,
-          quantity: Number(orderUpdate.quantity) || 0,
-          filledQuantity: Number(orderUpdate.filledQuantity) || 0,
-          side: orderUpdate.side,
-          status: orderUpdate.status,
-          filledAvgPrice: Number(orderUpdate.filledAvgPrice) || undefined,
-          submittedAt: submittedAt,
-          filledAt: filledAt,
-          clientOrderId: orderUpdate.clientOrderId,
-        } as StockOrder,
-      ];
+      const newOrder = {
+        symbol: orderUpdate.symbol,
+        quantity: Number(orderUpdate.quantity) || 0,
+        filledQuantity: Number(orderUpdate.filledQuantity) || 0,
+        side: orderUpdate.side,
+        status: orderUpdate.status,
+        filledAvgPrice: Number(orderUpdate.filledAvgPrice) || undefined,
+        submittedAt: submittedAt,
+        filledAt: filledAt,
+        clientOrderId: orderUpdate.clientOrderId,
+      } as StockOrder;
+
+      console.log('New order to be added:', newOrder);
+      console.log('Updated orders array:', [...updated, newOrder]);
+      
+      return [...updated, newOrder];
     });
   }, []);
 
