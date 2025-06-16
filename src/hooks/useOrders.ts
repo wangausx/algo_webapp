@@ -7,23 +7,19 @@ export const useOrders = (username: string) => {
   const handleOrderUpdate = useCallback((orderUpdate: StockOrder) => {
     console.log('handleOrderUpdate callback created');
     console.log('orderUpdate received: ', orderUpdate);
-    console.log('Current orders state before update:', orders);
+    
     setOrders((prev) => {
+      // console.log('Current orders state before update:', prev);
+      
       const submittedAt = orderUpdate.submittedAt ? new Date(orderUpdate.submittedAt) : new Date();
       const filledAt = orderUpdate.filledAt ? new Date(orderUpdate.filledAt) : undefined;
       
-      // Check if this order already exists
-      const isDuplicate = prev.some(
-        o => o.symbol === orderUpdate.symbol &&
-             o.side === orderUpdate.side &&
-             o.quantity === Number(orderUpdate.quantity) &&
-             // Check if the previous order was submitted within the last 3 minutes
-             o.submittedAt && 
-             (new Date().getTime() - o.submittedAt.getTime()) < 3 * 60 * 1000
-      );
+      // Check if this order already exists by clientOrderId
+      const isDuplicate = orderUpdate.clientOrderId && 
+        prev.some(o => o.clientOrderId === orderUpdate.clientOrderId);
 
       if (isDuplicate) {
-        console.log('Duplicate order detected, skipping update');
+        console.log('Duplicate order detected by clientOrderId, skipping update');
         return prev;
       }
 
@@ -43,20 +39,25 @@ export const useOrders = (username: string) => {
       } as StockOrder;
 
       console.log('New order to be added:', newOrder);
-      console.log('Updated orders array:', [...updated, newOrder]);
+      const updatedOrders = [...updated, newOrder];
+      // console.log('Updated orders array:', updatedOrders);
       
-      return [...updated, newOrder];
+      return updatedOrders;
     });
-  }, []);
+  }, []); // Remove orders dependency
 
   const fetchOrders = useCallback(async () => {
-    if (!username) return;
+    if (!username) {
+      console.log('No username provided, skipping order fetch');
+      return;
+    }
     
     try {
+      console.log('Fetching orders for user:', username);
       const ordersRes = await fetch(`http://localhost:3001/router/orders/${username}`);
       if (ordersRes.ok) {
         const ordersData = await ordersRes.json();
-        console.log('Recent orders retrieved: ', ordersData);
+        // console.log('Orders data received from server:', ordersData);
         const ordersArray = (Array.isArray(ordersData)
           ? ordersData
           : ordersData.orders || []
@@ -73,7 +74,7 @@ export const useOrders = (username: string) => {
         } as StockOrder));
         setOrders(ordersArray);
       } else {
-        console.log('No orders found.');
+        console.log('No orders found for user:', username);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);

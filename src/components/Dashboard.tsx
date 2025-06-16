@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { useOrders } from '../hooks/useOrders';
 import { useDashboardData } from '../hooks/useDashboardData';
 
 export interface OpenPosition {
@@ -45,6 +44,8 @@ interface DashboardProps {
   accountBalance: number;
   dailyPnL: number;
   refreshAccountData: () => Promise<void>;
+  orders: StockOrder[];
+  fetchOrders: () => Promise<void>;
 }
 
 const Dashboard: React.FC<DashboardProps> = React.memo(({ 
@@ -57,17 +58,14 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
   fetchClosedPositions,
   accountBalance,
   dailyPnL,
-  refreshAccountData
+  refreshAccountData,
+  orders,
+  fetchOrders
 }) => {
   // UI state
   const [showClosedPositions, setShowClosedPositions] = useState(false);
   const [showRecentOrders, setShowRecentOrders] = useState(false);
   const [showStopConfirmation, setShowStopConfirmation] = useState(false);
-
-  const { 
-    orders, 
-    fetchOrders 
-  } = useOrders(username);
 
   const { 
     isLoading, 

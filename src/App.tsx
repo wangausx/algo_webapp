@@ -52,11 +52,14 @@ const AlgoTradingApp: React.FC = () => {
     handleCancelPosition
   } = usePositions(accountConfig.username, refreshAccountData);
 
-  // Only keep handleOrderUpdate for WebSocket
-  const { handleOrderUpdate } = useOrders(accountConfig.username);
+  // Lift up orders state to app level
+  const { 
+    orders,
+    handleOrderUpdate,
+    fetchOrders 
+  } = useOrders(accountConfig.username);
 
   // WebSocket connection at app level
-  console.log('Setting up WebSocket connection for user:', accountConfig.username);
   useWebSocket(
     accountConfig.username,
     handlePositionUpdate,
@@ -137,6 +140,8 @@ const AlgoTradingApp: React.FC = () => {
             accountBalance={accountBalance}
             dailyPnL={dailyPnL}
             refreshAccountData={refreshAccountData}
+            orders={orders}
+            fetchOrders={fetchOrders}
           />
         )}
 

@@ -61,7 +61,6 @@ export function useWebSocket(
     const WS_PORT = 3001;
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const WS_URL = `${protocol}://${window.location.hostname}:${WS_PORT}`;
-    console.log('Attempting WebSocket connection to:', WS_URL);
 
     const connect = () => {
       if (isConnecting.current) {
@@ -76,7 +75,7 @@ export function useWebSocket(
 
       try {
         isConnecting.current = true;
-        console.log('Creating new WebSocket connection');
+        console.log('Setting up WebSocket connection for user:', userId);
         const ws = new WebSocket(WS_URL);
         wsRef.current = ws;
 
@@ -134,7 +133,7 @@ export function useWebSocket(
                   console.log('Calling onStockOrder callback with payload:', message.payload);
                   onStockOrder(message.payload);
                 } else {
-                  console.warn('onStockOrder callback is not provided');
+                  console.warn('onStockOrder callback is not provided for order update');
                 }
                 break;
               case 'position_deletion':
