@@ -145,7 +145,7 @@ export function useWebSocket(
                 onWarning?.(message.message);
                 break;
               case 'pong':
-                console.log('Received pong response');
+                //console.log('Received pong response');
                 break;
               default:
                 console.warn('Unhandled message type:', message.type);

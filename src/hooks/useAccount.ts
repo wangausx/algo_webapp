@@ -16,7 +16,7 @@ export const useAccount = (username: string) => {
       const accountData = await accountRes.json();
       setAccountBalance(Number(accountData.balance) || 0);
       setDailyPnL(Number(accountData.dailyPnL) || 0);
-      console.log('Account data refreshed:', accountData);
+      //console.log('Account data refreshed:', accountData);
     } catch (error) {
       console.error('Error refreshing account data:', error);
       throw error;

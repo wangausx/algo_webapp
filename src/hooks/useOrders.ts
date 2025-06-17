@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { StockOrder } from '../components/Dashboard';
 
 export const useOrders = (username: string) => {
@@ -44,7 +44,7 @@ export const useOrders = (username: string) => {
       
       return updatedOrders;
     });
-  }, []); // Remove orders dependency
+  }, []);
 
   const fetchOrders = useCallback(async () => {
     if (!username) {
@@ -55,9 +55,11 @@ export const useOrders = (username: string) => {
     try {
       console.log('Fetching orders for user:', username);
       const ordersRes = await fetch(`http://localhost:3001/router/orders/${username}`);
+      console.log('Orders response status:', ordersRes.status, ordersRes.ok);
+      
       if (ordersRes.ok) {
         const ordersData = await ordersRes.json();
-        // console.log('Orders data received from server:', ordersData);
+        //console.log('Orders data received from server:', ordersData);
         const ordersArray = (Array.isArray(ordersData)
           ? ordersData
           : ordersData.orders || []
@@ -75,12 +77,21 @@ export const useOrders = (username: string) => {
         setOrders(ordersArray);
       } else {
         console.log('No orders found for user:', username);
+        setOrders([]);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
+      setOrders([]);
       throw error;
     }
   }, [username]);
+
+  // Fetch orders when username changes
+  useEffect(() => {
+    if (username) {
+      fetchOrders();
+    }
+  }, [username, fetchOrders]);
 
   return {
     orders,

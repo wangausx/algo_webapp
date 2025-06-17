@@ -52,9 +52,11 @@ export const usePositions = (
     
     try {
       const closedPositionsRes = await fetch(`http://localhost:3001/router/closed-positions/${username}`);
+      console.log('Closed positions response status:', closedPositionsRes.status, closedPositionsRes.ok);
+      
       if (closedPositionsRes.ok) {
         const closedPositionsData = await closedPositionsRes.json();
-        console.log('Raw closed positions data from server:', closedPositionsData);
+        //console.log('Raw closed positions data from server:', closedPositionsData);
         
         const closedPositionsArray = closedPositionsData.map((entry: any) => ({
           ...entry,
@@ -73,18 +75,27 @@ export const usePositions = (
         setClosedPositions(closedPositionsArray);
       } else {
         console.log('No closed positions yet!');
+        setClosedPositions([]);
       }
     } catch (error) {
       console.error('Error fetching closed positions:', error);
+      setClosedPositions([]);
     }
   }, [username]);
 
+  // Fetch closed positions when username changes
+  useEffect(() => {
+    if (username) {
+      fetchClosedPositions();
+    }
+  }, [username, fetchClosedPositions]);
+
   const handlePositionUpdate = useCallback((positionUpdate: OpenPosition) => {
-    console.log('handlePositionUpdate callback created');
+    //console.log('handlePositionUpdate callback created');
     console.log('Dashboard received position update:', positionUpdate);
     
     setPositions((prev) => {
-      console.log('Previous positions state:', prev);
+      //console.log('Previous positions state:', prev);
       
       const existingPositionIndex = prev.findIndex(
         (p) => p.symbol === positionUpdate.symbol && p.side === positionUpdate.side
@@ -99,8 +110,8 @@ export const usePositions = (
         unrealizedPl: positionUpdate.unrealizedPl != null ? Number(positionUpdate.unrealizedPl) : 0,
       } as OpenPosition;
       
-      console.log('Position update type:', existingPositionIndex === -1 ? 'New position' : 'Update existing position');
-      console.log('Position data:', newPosition);
+      //console.log('Position update type:', existingPositionIndex === -1 ? 'New position' : 'Update existing position');
+      //console.log('Position data:', newPosition);
       
       let newPositions;
       if (existingPositionIndex === -1) {
@@ -116,10 +127,10 @@ export const usePositions = (
           currentPrice: newPosition.currentPrice ?? newPositions[existingPositionIndex].currentPrice,
           unrealizedPl: newPosition.unrealizedPl ?? newPositions[existingPositionIndex].unrealizedPl,
         };
-        console.log('Updating existing position in state');
+        //console.log('Updating existing position in state');
       }
       
-      console.log('New positions state:', newPositions);
+      //console.log('New positions state:', newPositions);
       return [...newPositions];
     });
 
