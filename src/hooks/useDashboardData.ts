@@ -40,8 +40,6 @@ export const useDashboardData = (
         } as OpenPosition));
         
         setInitialPositions(positionArray);
-        // Refresh account data when positions are updated
-        await refreshAccountData();
         return positionArray;
       } else {
         console.log('No open positions yet!');
@@ -54,18 +52,17 @@ export const useDashboardData = (
     } finally {
       setIsLoading(false);
     }
-  }, [username, refreshAccountData]);
+  }, [username]);
 
   const fetchAllData = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // Fetch all data in parallel
+      // Fetch closed positions and orders in parallel
       await Promise.all([
         fetchClosedPositions(),
-        fetchOrders(),
-        refreshAccountData()
+        fetchOrders()
       ]);
 
     } catch (error) {
@@ -74,18 +71,24 @@ export const useDashboardData = (
     } finally {
       setIsLoading(false);
     }
-  }, [fetchClosedPositions, fetchOrders, refreshAccountData]);
+  }, [fetchClosedPositions, fetchOrders]);
 
   const initializeData = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // First fetch initial positions
+      console.log('Starting data initialization for user:', username);
+
+      // Then fetch initial positions (which will also refresh account data)
+      console.log('Fetching initial positions...');
       const positions = await fetchInitialData();
+      console.log('Initial positions fetched successfully');
       
-      // Then fetch all other data
+      // Finally fetch all other data in parallel (which will also refresh account data)
+      console.log('Fetching remaining data in parallel...');
       await fetchAllData();
+      console.log('All data initialization completed');
 
       return positions;
     } catch (error) {
@@ -95,7 +98,7 @@ export const useDashboardData = (
     } finally {
       setIsLoading(false);
     }
-  }, [fetchInitialData, fetchAllData]);
+  }, [username, fetchInitialData, fetchAllData]);
 
   return {
     isLoading,

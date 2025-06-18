@@ -116,7 +116,7 @@ export function useWebSocket(
         ws.onmessage = (event) => {
           try {
             const message = JSON.parse(event.data);
-            console.log('Received WebSocket message:', message);
+            //console.log('Received WebSocket message:', message);
             
             switch (message.type) {
               case 'connection_established':
