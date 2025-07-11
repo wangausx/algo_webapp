@@ -32,9 +32,9 @@ export const useDashboardData = (
           : positionData.positions || []
         ).map((entry: any) => ({
           symbol: entry.symbol,
-          side: entry.side,
+          side: entry.side || 'long', // Default to 'long' if side is not provided
           quantity: Number(entry.quantity) || 0,
-          entryPrice: Number(entry.avgEntryPrice) || 0,
+          entryPrice: Number(entry.entryPrice) || 0,
           currentPrice: entry.currentPrice != null ? Number(entry.currentPrice) : null,
           unrealizedPl: entry.unrealizedPl != null ? Number(entry.unrealizedPl) : 0,
         } as OpenPosition));
@@ -80,12 +80,17 @@ export const useDashboardData = (
 
       console.log('Starting data initialization for user:', username);
 
-      // Then fetch initial positions (which will also refresh account data)
+      // First establish user account in backend
+      console.log('Establishing user account in backend...');
+      await refreshAccountData();
+      console.log('User account established successfully');
+
+      // Then fetch initial positions
       console.log('Fetching initial positions...');
       const positions = await fetchInitialData();
       console.log('Initial positions fetched successfully');
       
-      // Finally fetch all other data in parallel (which will also refresh account data)
+      // Finally fetch all other data in parallel
       console.log('Fetching remaining data in parallel...');
       await fetchAllData();
       console.log('All data initialization completed');
@@ -98,7 +103,7 @@ export const useDashboardData = (
     } finally {
       setIsLoading(false);
     }
-  }, [username, fetchInitialData, fetchAllData]);
+  }, [username, fetchInitialData, fetchAllData, refreshAccountData]);
 
   return {
     isLoading,

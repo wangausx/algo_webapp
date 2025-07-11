@@ -19,15 +19,29 @@ export const usePositions = (
         const positionArray = (Array.isArray(positionData)
           ? positionData
           : positionData.positions || []
-        ).map((entry: any) => ({
-          symbol: entry.symbol,
-          side: entry.side,
-          quantity: Number(entry.quantity) || 0,
-          entryPrice: Number(entry.avgEntryPrice) || 0,
-          currentPrice: entry.currentPrice != null ? Number(entry.currentPrice) : null,
-          unrealizedPl: entry.unrealizedPl != null ? Number(entry.unrealizedPl) : 0,
-        } as OpenPosition));
+        ).map((entry: any) => {
+          console.log('Processing position entry:', entry);
+          const mappedPosition = {
+            symbol: entry.symbol,
+            side: entry.side || 'long', // Default to 'long' if side is not provided
+            quantity: Number(entry.quantity) || 0,
+            entryPrice: Number(entry.entryPrice) || 0,
+            currentPrice: entry.currentPrice != null ? Number(entry.currentPrice) : null,
+            unrealizedPl: entry.unrealizedPl != null ? Number(entry.unrealizedPl) : 0,
+          } as OpenPosition;
+          
+          // Additional validation
+          if (!mappedPosition.symbol) {
+            console.warn('Position missing symbol:', entry);
+            return null;
+          }
+          
+          console.log('Mapped position:', mappedPosition);
+          return mappedPosition;
+        }).filter((position: OpenPosition | null): position is OpenPosition => position !== null);
         
+        console.log('Final positions array:', positionArray);
+        console.log('Setting positions state with:', positionArray);
         setPositions(positionArray);
         return positionArray;
       } else {
@@ -46,6 +60,11 @@ export const usePositions = (
       fetchInitialPositions();
     }
   }, [username, fetchInitialPositions]);
+
+  // Debug: Monitor positions state changes
+  useEffect(() => {
+    console.log('Positions state changed:', positions);
+  }, [positions]);
 
   const fetchClosedPositions = useCallback(async () => {
     if (!username) return;

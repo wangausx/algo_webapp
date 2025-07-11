@@ -62,6 +62,8 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
   orders,
   fetchOrders
 }) => {
+  // Debug: Log positions prop
+  console.log('Dashboard received positions prop:', positions);
   // UI state
   const [showClosedPositions, setShowClosedPositions] = useState(false);
   const [showRecentOrders, setShowRecentOrders] = useState(false);
