@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { StockOrder } from '../components/Dashboard';
+import { buildApiUrl } from '../config/api';
 
 export const useOrders = (username: string) => {
   const [orders, setOrders] = useState<StockOrder[]>([]);
@@ -54,7 +55,7 @@ export const useOrders = (username: string) => {
     
     try {
       console.log('Fetching orders for user:', username);
-      const ordersRes = await fetch(`http://localhost:3001/router/orders/${username}`);
+      const ordersRes = await fetch(buildApiUrl(`/router/orders/${username}`));
       console.log('Orders response status:', ordersRes.status, ordersRes.ok);
       
       if (ordersRes.ok) {

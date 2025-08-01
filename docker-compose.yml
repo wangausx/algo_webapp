@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Frontend React application
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_API_URL=http://localhost:3000
+    networks:
+      - trading-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Backend API server (you'll need to provide this)
+  backend:
+    image: your-backend-image:latest  # Replace with your actual backend image
+    # build:
+    #   context: ../backend  # Uncomment if you have a backend Dockerfile
+    #   dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=your_database_url_here
+      - ANTHROPIC_API_KEY=your_anthropic_api_key_here
+    networks:
+      - trading-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Database service (if needed)
+  # database:
+  #   image: postgres:15-alpine
+  #   environment:
+  #     POSTGRES_DB: trading_db
+  #     POSTGRES_USER: trading_user
+  #     POSTGRES_PASSWORD: your_secure_password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - trading-network
+  #   restart: unless-stopped
+
+  # Optional: Redis for caching (if needed)
+  # redis:
+  #   image: redis:7-alpine
+  #   networks:
+  #     - trading-network
+  #   restart: unless-stopped
+
+networks:
+  trading-network:
+    driver: bridge
+
+volumes:
+  # postgres_data:  # Uncomment if using database service 

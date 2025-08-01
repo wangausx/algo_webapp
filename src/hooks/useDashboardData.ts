@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { OpenPosition } from '../components/Dashboard';
+import { buildApiUrl } from '../config/api';
 
 export const useDashboardData = (
   username: string,
@@ -23,7 +24,7 @@ export const useDashboardData = (
       setError(null);
 
       // Fetch initial positions
-      const positionRes = await fetch(`http://localhost:3001/router/positions/${username}`);
+      const positionRes = await fetch(buildApiUrl(`/router/positions/${username}`));
       if (positionRes.ok) {
         const positionData = await positionRes.json();
         console.log('Open positions retrieved: ', positionData);

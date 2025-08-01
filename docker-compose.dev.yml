@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # Frontend React application (development)
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    networks:
+      - trading-network
+    stdin_open: true
+    tty: true
+
+  # Backend API server (development)
+  backend-dev:
+    image: your-backend-image:dev  # Replace with your actual backend image
+    # build:
+    #   context: ../backend
+    #   dockerfile: Dockerfile.dev
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DATABASE_URL=your_database_url_here
+      - ANTHROPIC_API_KEY=your_anthropic_api_key_here
+    volumes:
+      - ../backend:/app  # Uncomment if you have backend source code
+      - /app/node_modules
+    networks:
+      - trading-network
+    stdin_open: true
+    tty: true
+
+networks:
+  trading-network:
+    driver: bridge 

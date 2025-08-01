@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { OpenPosition, StockOrder } from '../components/Dashboard';
+import { buildWsUrl } from '../config/api';
 
 export interface PositionUpdatePayload {
   type: 'position_update';
@@ -58,9 +59,7 @@ export function useWebSocket(
       return;
     }
 
-    const WS_PORT = 3001;
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const WS_URL = `${protocol}://${window.location.hostname}:${WS_PORT}`;
+    const WS_URL = buildWsUrl();
 
     const connect = () => {
       if (isConnecting.current) {

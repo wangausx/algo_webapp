@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { OpenPosition, ClosedPosition } from '../components/Dashboard';
+import { buildApiUrl } from '../config/api';
 
 export const usePositions = (
   username: string,
@@ -12,7 +13,7 @@ export const usePositions = (
     if (!username) return;
     
     try {
-      const positionRes = await fetch(`http://localhost:3001/router/positions/${username}`);
+      const positionRes = await fetch(buildApiUrl(`/router/positions/${username}`));
       if (positionRes.ok) {
         const positionData = await positionRes.json();
         console.log('Open positions retrieved: ', positionData);
@@ -70,7 +71,7 @@ export const usePositions = (
     if (!username) return;
     
     try {
-      const closedPositionsRes = await fetch(`http://localhost:3001/router/closed-positions/${username}`);
+      const closedPositionsRes = await fetch(buildApiUrl(`/router/closed-positions/${username}`));
       console.log('Closed positions response status:', closedPositionsRes.status, closedPositionsRes.ok);
       
       if (closedPositionsRes.ok) {
@@ -211,7 +212,7 @@ export const usePositions = (
     if (!username) return;
     
     try {
-      const response = await fetch(`http://localhost:3001/router/cancel-position/${username}`, {
+      const response = await fetch(buildApiUrl(`/router/cancel-position/${username}`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

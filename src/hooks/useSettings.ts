@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AccountConfig, TradeSetting } from '../components/Settings';
 import { useState } from 'react';
+import { buildApiUrl } from '../config/api';
 
 interface UseSettingsProps {
   accountConfig: AccountConfig;
@@ -32,7 +33,7 @@ export const useSettings = ({
     e.preventDefault();
     console.log('Payload being sent:', JSON.stringify(accountConfig));
     try {
-      const response = await fetch('/router/account', {
+      const response = await fetch(buildApiUrl('/router/account'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -133,7 +134,7 @@ export const useSettings = ({
 
       try {
         // Load account settings including balance
-        const accountRes = await fetch(`http://localhost:3001/router/account/${accountConfig.username}`);
+        const accountRes = await fetch(buildApiUrl(`/router/account/${accountConfig.username}`));
         if (!accountRes.ok) throw new Error('Failed to fetch account settings');
         const accountData = await accountRes.json();
         console.log('Loaded account data:', accountData);

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { buildApiUrl } from '../config/api';
 
 export const useAccount = (username: string) => {
   const [accountBalance, setAccountBalance] = useState(10000);
@@ -12,7 +13,7 @@ export const useAccount = (username: string) => {
     
     try {
       //console.log('Fetching account data for user:', username);
-      const accountRes = await fetch(`http://localhost:3001/router/account/${username}`);
+      const accountRes = await fetch(buildApiUrl(`/router/account/${username}`));
       //console.log('Account response status:', accountRes.status, accountRes.ok);
       
       if (!accountRes.ok) {
