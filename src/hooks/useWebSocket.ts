@@ -60,6 +60,13 @@ export function useWebSocket(
     }
 
     const WS_URL = buildWsUrl();
+    console.log('Attempting WebSocket connection to:', WS_URL);
+    console.log('Current window.location:', {
+      protocol: window.location.protocol,
+      host: window.location.host,
+      hostname: window.location.hostname,
+      port: window.location.port
+    });
 
     const connect = () => {
       if (isConnecting.current) {
@@ -124,20 +131,40 @@ export function useWebSocket(
                 break;
               case 'position_update':
                 console.log('Handling position update:', message.payload);
-                onPositionUpdate(message.payload);
+                if (message.payload && typeof message.payload === 'object') {
+                  // Validate position update data
+                  const payload = message.payload;
+                  if (payload.symbol && (payload.side === 'long' || payload.side === 'short')) {
+                    onPositionUpdate(message.payload);
+                  } else {
+                    console.warn('Invalid position update payload:', payload);
+                  }
+                } else {
+                  console.warn('Invalid position update message format:', message);
+                }
                 break;
               case 'order_update':
                 console.log('Handling order update:', message.payload);
-                if (onStockOrder) {
-                  console.log('Calling onStockOrder callback with payload:', message.payload);
-                  onStockOrder(message.payload);
+                if (onStockOrder && message.payload && typeof message.payload === 'object') {
+                  // Validate order update data
+                  const payload = message.payload;
+                  if (payload.symbol && (payload.side === 'buy' || payload.side === 'sell')) {
+                    console.log('Calling onStockOrder callback with payload:', message.payload);
+                    onStockOrder(message.payload);
+                  } else {
+                    console.warn('Invalid order update payload:', payload);
+                  }
                 } else {
-                  console.warn('onStockOrder callback is not provided for order update');
+                  console.warn('onStockOrder callback is not provided for order update or invalid payload');
                 }
                 break;
               case 'position_deletion':
                 console.log('Handling position deletion:', message.payload);
-                onPositionDeletion?.(message.payload.symbol);
+                if (message.payload && typeof message.payload === 'object' && message.payload.symbol) {
+                  onPositionDeletion?.(message.payload.symbol);
+                } else {
+                  console.warn('Invalid position deletion payload:', message.payload);
+                }
                 break;
               case 'warning':
                 console.log('Received warning:', message.message);

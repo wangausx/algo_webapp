@@ -1,0 +1,38 @@
+[wsl2]
+# Memory allocation (adjust based on your system)
+memory=4GB
+
+# CPU allocation 
+processors=4
+
+# Enable localhost forwarding
+localhostForwarding=true
+
+# Enable DNS tunneling
+dnsTunneling=true
+
+# Enable firewall (Windows 11 22H2+)
+firewall=true
+
+# Enable auto-proxy
+autoProxy=true
+
+# Swap allocation
+swap=2GB
+
+# Page reporting
+pageReporting=true
+
+# Kernel command line arguments
+kernelCommandLine=cgroup_no_v1=all systemd.unified_cgroup_hierarchy=1
+
+[experimental]
+# Enable mirrored networking mode (Windows 11 22H2+)
+# This makes WSL2 use the same network interface as Windows
+networkingMode=mirrored
+
+# Enable auto memory reclaim
+autoMemoryReclaim=gradual
+
+# Automatically restart WSL2 when configuration changes
+autoRestart=true 

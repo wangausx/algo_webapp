@@ -1,0 +1,16 @@
+[wsl2]
+# Enable port forwarding
+localhostForwarding=true
+
+# Memory limit
+memory=4GB
+
+# CPU limit
+processors=4
+
+# Enable nested virtualization
+nestedVirtualization=true
+
+# Enable experimental features
+[experimental]
+networkingMode=mirrored 

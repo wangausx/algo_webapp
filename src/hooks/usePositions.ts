@@ -130,8 +130,8 @@ export const usePositions = (
         unrealizedPl: positionUpdate.unrealizedPl != null ? Number(positionUpdate.unrealizedPl) : 0,
       } as OpenPosition;
       
-      //console.log('Position update type:', existingPositionIndex === -1 ? 'New position' : 'Update existing position');
-      //console.log('Position data:', newPosition);
+      console.log('Position update type:', existingPositionIndex === -1 ? 'New position' : 'Update existing position');
+      console.log('Position data:', newPosition);
       
       let newPositions;
       if (existingPositionIndex === -1) {
@@ -159,7 +159,6 @@ export const usePositions = (
   }, [refreshAccountData]);
 
   const handlePositionDeletion = useCallback((symbol: string) => {
-    console.log('handlePositionDeletion callback created');
     console.log('Position deletion received for symbol:', symbol);
     setPositions((prev) => {
       const closedPosition = prev.find((p) => p.symbol === symbol);

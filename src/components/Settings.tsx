@@ -379,7 +379,7 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
 
                   {/* Risk Percentage */}
                   <div className="space-y-1">
-                    <label className="text-xs md:text-sm">Risk Percentage (%)</label>
+                    <label className="text-xs md:text-sm">Base Position Risk (%)</label>
                     <input
                       type="number"
                       value={tradeSetting.riskSettings.riskPercentage || ''}

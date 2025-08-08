@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # Frontend React application for home network development
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8081:3000"
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_DOCKER=true
+      - REACT_APP_API_URL=http://192.168.1.143:3002
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
+      - WDS_SOCKET_HOST=localhost
+      - WDS_SOCKET_PORT=8081
+      - HOST=0.0.0.0
+      - WATCHPACK_POLLING=true
+    networks:
+      - trading-network
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+    restart: unless-stopped
+
+networks:
+  trading-network:
+    driver: bridge 

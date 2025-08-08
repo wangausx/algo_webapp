@@ -1,4 +1,4 @@
-# Development Dockerfile for React application
+# Development Dockerfile for local testing
 FROM node:18-alpine
 
 # Set working directory
@@ -7,13 +7,13 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies (including dev dependencies)
+# Install dependencies
 RUN npm install
 
 # Copy source code
 COPY . .
 
-# Expose port 3000
+# Expose port
 EXPOSE 3000
 
 # Start development server

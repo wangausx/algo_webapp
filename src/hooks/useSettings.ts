@@ -59,7 +59,7 @@ export const useSettings = ({
       throw new Error('Invalid trade setting data');
     }
     try {
-      const response = await fetch('/api/tradesetting', {
+      const response = await fetch(buildApiUrl('/api/tradesetting'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -141,7 +141,7 @@ export const useSettings = ({
         if (accountData) setAccountConfig((prev) => ({ ...prev, ...accountData }));
 
         // Load tradeSetting
-        const trade_setting = await fetch(`/api/tradesetting/${accountConfig.username}`);
+        const trade_setting = await fetch(buildApiUrl(`/api/tradesetting/${accountConfig.username}`));
         if (!trade_setting.ok) throw new Error('Failed to fetch tradeSetting');
         const tradesetting_data = await trade_setting.json();
         console.log('Loaded tradeSetting data:', tradesetting_data);

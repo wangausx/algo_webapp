@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { buildApiUrl } from '../config/api';
 
 export const useTrading = (username: string) => {
   const [tradingStatus, setTradingStatus] = useState<'stopped' | 'running'>('stopped');
@@ -8,7 +9,7 @@ export const useTrading = (username: string) => {
       try {
         
         console.log('Fetching trading status for:', username);
-        const response = await fetch(`/api/tradesetting/${username}`);
+        const response = await fetch(buildApiUrl(`/api/tradesetting/${username}`));
         if (!response.ok) {
           throw new Error('Failed to fetch trading status');
         }
@@ -34,7 +35,7 @@ export const useTrading = (username: string) => {
       
       try {
         console.log('Request trading status change for:', username);
-        fetch('/router/trade', {
+        fetch(buildApiUrl('/router/trade'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

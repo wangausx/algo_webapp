@@ -1,19 +1,21 @@
-version: '3.8'
+# Docker Compose configuration for home network deployment
 
 services:
-  # Frontend React application
+  # Frontend React application for home network
   frontend:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3000:80"
-    depends_on:
-      - backend
+      - "3000:80"  # Map container port 80 to host port 3000
     environment:
       - NODE_ENV=production
+      - REACT_APP_API_URL=http://192.168.1.143:3000
       - REACT_APP_DOCKER=true
-      - REACT_APP_API_URL=http://localhost:3000
+    volumes:
+      - ./nginx.home.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - backend
     networks:
       - trading-network
     restart: unless-stopped
@@ -24,11 +26,11 @@ services:
       retries: 3
       start_period: 40s
 
-  # Backend API server (you'll need to provide this)
+  # Real backend service (replace mock-backend)
   backend:
     image: your-backend-image:latest  # Replace with your actual backend image
     # build:
-    #   context: ../backend  # Uncomment if you have a backend Dockerfile
+    #   context: ../backend
     #   dockerfile: Dockerfile
     ports:
       - "3001:3001"
@@ -47,29 +49,22 @@ services:
       retries: 3
       start_period: 40s
 
-  # Optional: Database service (if needed)
-  # database:
-  #   image: postgres:15-alpine
-  #   environment:
-  #     POSTGRES_DB: trading_db
-  #     POSTGRES_USER: trading_user
-  #     POSTGRES_PASSWORD: your_secure_password
+  # Optional: Mock backend service (for testing without real backend)
+  # mock-backend:
+  #   image: nginx:alpine
+  #   ports:
+  #     - "3002:80"
   #   volumes:
-  #     - postgres_data:/var/lib/postgresql/data
+  #     - ./mock-api:/usr/share/nginx/html
   #   networks:
   #     - trading-network
   #   restart: unless-stopped
-
-  # Optional: Redis for caching (if needed)
-  # redis:
-  #   image: redis:7-alpine
-  #   networks:
-  #     - trading-network
-  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
 networks:
   trading-network:
-    driver: bridge
-
-volumes:
-  # postgres_data:  # Uncomment if using database service 
+    driver: bridge 
