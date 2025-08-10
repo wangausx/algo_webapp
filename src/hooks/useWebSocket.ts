@@ -98,28 +98,37 @@ export function useWebSocket(
           clearTimeout(connectionTimeout);
           isConnecting.current = false;
           console.log('WebSocket connected successfully');
+          console.log('WebSocket readyState after connection:', ws.readyState);
           reconnectAttempts.current = 0;
           
-          // Only send subscription if not already subscribed
-          if (!isSubscribed.current) {
-            const subscribeMessage = { type: 'subscribe', userId };
-            console.log('Sending subscription message:', subscribeMessage);
+          // Send subscription message immediately upon connection
+          const subscribeMessage = { type: 'subscribe', userId };
+          console.log('Sending subscription message:', subscribeMessage);
+          try {
             ws.send(JSON.stringify(subscribeMessage));
             console.log('User subscribed to WebSocket:', userId);
+            isSubscribed.current = true;
+          } catch (err) {
+            console.error('Error sending subscription message:', err);
           }
-
+          
           // Start heartbeat
           if (heartbeatRef.current) {
             clearInterval(heartbeatRef.current);
           }
           heartbeatRef.current = setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: 'ping' }));
+              try {
+                ws.send(JSON.stringify({ type: 'ping' }));
+              } catch (err) {
+                console.error('Error sending ping:', err);
+              }
             }
           }, 10000);
         };
 
         ws.onmessage = (event) => {
+          console.log('WebSocket message received:', event.data);
           try {
             const message = JSON.parse(event.data);
             //console.log('Received WebSocket message:', message);
@@ -191,6 +200,7 @@ export function useWebSocket(
             wasClean: event.wasClean,
             timestamp: new Date().toISOString()
           });
+          console.log('WebSocket readyState at close:', ws.readyState);
           
           // Log specific close codes
           switch (event.code) {
@@ -252,6 +262,8 @@ export function useWebSocket(
         };
 
         ws.onerror = (err) => {
+          console.error('WebSocket error event fired:', err);
+          console.log('WebSocket readyState at error:', ws.readyState);
           clearTimeout(connectionTimeout);
           isConnecting.current = false;
           console.error('WebSocket error:', {
@@ -259,7 +271,8 @@ export function useWebSocket(
             timestamp: new Date().toISOString(),
             readyState: ws.readyState
           });
-          ws.close(); // Triggers `onclose`
+          // Don't call ws.close() here - let the onclose handler deal with it
+          // ws.close(); // Triggers `onclose`
         };
       } catch (err) {
         isConnecting.current = false;

@@ -13,7 +13,7 @@ services:
       - REACT_APP_DOCKER=true
       - REACT_APP_API_URL=http://192.168.1.143:3002
       - DANGEROUSLY_DISABLE_HOST_CHECK=true
-      - WDS_SOCKET_HOST=localhost
+      - WDS_SOCKET_HOST=107.137.66.174
       - WDS_SOCKET_PORT=8081
       - HOST=0.0.0.0
       - WATCHPACK_POLLING=true
