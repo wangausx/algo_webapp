@@ -2,7 +2,6 @@
   "name": "algo_webapp",
   "version": "0.1.0",
   "private": true,
-  "proxy": "http://192.168.1.143:3002",
   "homepage": "/",
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.6",
@@ -31,7 +30,7 @@
   },
   "scripts": {
     "start": "HOST=0.0.0.0 react-scripts start",
-    "start:dev": "NODE_ENV=development REACT_APP_DOCKER=false react-scripts start",
+    "start:dev": "NODE_ENV=development REACT_APP_DOCKER=false HOST=0.0.0.0 react-scripts start",
     "start:docker": "NODE_ENV=production REACT_APP_DOCKER=true react-scripts start",
     "build": "NODE_OPTIONS='--openssl-legacy-provider' react-app-rewired build",
     "build:dev": "NODE_ENV=development REACT_APP_DOCKER=false npm run build",

@@ -53,7 +53,7 @@ services:
   # mock-backend:
   #   image: nginx:alpine
   #   ports:
-  #     - "3002:80"
+  #     - "3003:80"
   #   volumes:
   #     - ./mock-api:/usr/share/nginx/html
   #   networks:

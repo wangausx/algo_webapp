@@ -8,8 +8,8 @@ param(
 )
 
 # Configuration
-$WSL_IP = "172.22.120.208"  # Your current WSL2 IP
-$PORTS = @(8080, 3000, 3001)  # Ports to forward
+$WSL_IP = "192.168.1.143"  # Your current WSL2 IP
+$PORTS = @(8082, 3000, 3001, 3003)  # Ports to forward (added 8082 for frontend, 3003 for backend)
 $RULE_PREFIX = "WSL2-Docker"
 
 function Get-WSL2-IP {

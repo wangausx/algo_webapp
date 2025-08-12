@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Frontend React application for home network development
   frontend:
@@ -7,22 +5,31 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     ports:
-      - "8081:3000"
+      - "8082:3000"
     environment:
       - NODE_ENV=development
       - REACT_APP_DOCKER=true
-      - REACT_APP_API_URL=http://192.168.1.143:3002
+      - REACT_APP_API_URL=http://192.168.1.143:3003
       - DANGEROUSLY_DISABLE_HOST_CHECK=true
-      - WDS_SOCKET_HOST=107.137.66.174
-      - WDS_SOCKET_PORT=8081
+      - WDS_SOCKET_HOST=0.0.0.0
+      - WDS_SOCKET_PORT=8082
       - HOST=0.0.0.0
       - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+      - FAST_REFRESH=false
+      - WDS_SOCKET_PATH=/ws
+      - GENERATE_SOURCEMAP=false
+      - INLINE_RUNTIME_CHUNK=false
+      - WDS_SOCKET_PROTOCOL=ws
     networks:
       - trading-network
     volumes:
       - ./src:/app/src
       - ./public:/app/public
     restart: unless-stopped
+    # Add this to ensure the container can bind to all interfaces
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 networks:
   trading-network:
