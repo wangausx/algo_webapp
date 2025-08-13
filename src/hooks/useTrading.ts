@@ -6,8 +6,12 @@ export const useTrading = (username: string) => {
 
   useEffect(() => {
     const fetchTradingStatus = async () => {
+      // Only fetch trading status for valid usernames (>= 6 characters)
+      if (!username || username.length < 6) {
+        return;
+      }
+      
       try {
-        
         console.log('Fetching trading status for:', username);
         const response = await fetch(buildApiUrl(`/api/tradesetting/${username}`));
         if (!response.ok) {

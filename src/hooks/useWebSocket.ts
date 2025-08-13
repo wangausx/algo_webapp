@@ -72,8 +72,8 @@ export function useWebSocket(
   };
 
   const connect = () => {
-    if (!userId) {
-      console.log('No userId provided, skipping WebSocket connection');
+    if (!userId || userId.length < 6) {
+      console.log('No userId provided or userId too short (< 6 chars), skipping WebSocket connection');
       return;
     }
 
@@ -314,8 +314,8 @@ export function useWebSocket(
   }, [userId, onPositionUpdate, onStockOrder, onPositionDeletion, onWarning]);
 
   useEffect(() => {
-    if (!userId) {
-      console.log('No userId provided, skipping WebSocket connection');
+    if (!userId || userId.length < 6) {
+      console.log('No userId provided or userId too short (< 6 chars), skipping WebSocket connection');
       return;
     }
 

@@ -151,7 +151,7 @@ export const useTradeSettings = (username: string) => {
 
   // Load trade settings data - memoized with useCallback
   const loadTradeSettings = useCallback(async () => {
-    if (!username) return;
+    if (!username || username.length < 6) return;
     
     setIsLoading(true);
     try {
@@ -175,9 +175,9 @@ export const useTradeSettings = (username: string) => {
     setTradeSetting(prev => ({ ...prev, user_id: username }));
   }, [username]);
 
-  // Load data when username changes
+  // Load data when username changes - only for valid usernames (>= 6 characters)
   useEffect(() => {
-    if (username) {
+    if (username && username.length >= 6) {
       loadTradeSettings();
     }
   }, [username, loadTradeSettings]);

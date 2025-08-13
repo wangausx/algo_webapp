@@ -97,9 +97,9 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
     }
   };
 
-  // Initial data fetch
+  // Initial data fetch - only for valid usernames (>= 6 characters)
   useEffect(() => {
-    if (username) {
+    if (username && username.length >= 6) {
       initializeData();
     }
   }, [username, initializeData]);

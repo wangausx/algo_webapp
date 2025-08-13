@@ -10,7 +10,7 @@ export const usePositions = (
   const [closedPositions, setClosedPositions] = useState<ClosedPosition[]>([]);
 
   const fetchInitialPositions = useCallback(async () => {
-    if (!username) return;
+    if (!username || username.length < 6) return;
     
     try {
       const positionRes = await fetch(buildApiUrl(`/router/positions/${username}`));
@@ -56,9 +56,9 @@ export const usePositions = (
     }
   }, [username]);
 
-  // Fetch initial positions when username changes
+  // Fetch initial positions when username changes - only for valid usernames (>= 6 characters)
   useEffect(() => {
-    if (username) {
+    if (username && username.length >= 6) {
       fetchInitialPositions();
     }
   }, [username, fetchInitialPositions]);
@@ -74,7 +74,7 @@ export const usePositions = (
   }, [positions]);
 
   const fetchClosedPositions = useCallback(async () => {
-    if (!username) return;
+    if (!username || username.length < 6) return;
     
     try {
       const closedPositionsRes = await fetch(buildApiUrl(`/router/closed-positions/${username}`));
@@ -106,9 +106,9 @@ export const usePositions = (
     }
   }, [username]);
 
-  // Fetch closed positions when username changes
+  // Fetch closed positions when username changes - only for valid usernames (>= 6 characters)
   useEffect(() => {
-    if (username) {
+    if (username && username.length >= 6) {
       fetchClosedPositions();
     }
   }, [username, fetchClosedPositions]);

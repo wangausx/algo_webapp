@@ -35,15 +35,25 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   isDemoAccountSelected,
   setIsDemoAccountSelected
 }) => {
+  /*
+   * Account Logic Flow:
+   * 1. Username input: When user types username >= 6 characters, query existing account data
+   * 2. Account creation: Only happens when "Save Settings" button is pressed
+   * 3. Demo account: Loads predefined demo data, no creation/editing allowed
+   * 4. Personal account: Can query existing data, create new accounts, or update existing ones
+   */
   const [showRestrictionPopup, setShowRestrictionPopup] = React.useState(false);
   const demoDataLoadedRef = React.useRef(false);
+  const personalDataLoadedRef = React.useRef(false);
   
   const {
     accountConfig: currentAccountConfig,
     setAccountConfig: setCurrentAccountConfig,
     isLoading,
     saveAccountSettings,
-    loadDemoAccountData
+    loadDemoAccountData,
+    loadAccountSettings,
+    usernameValidation
   } = useAccountSettings(accountConfig.username);
 
   // Load demo account data when demo account is selected
@@ -52,12 +62,46 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       // Load demo account data when demo account is selected (only once)
       console.log('Loading demo account data...');
       demoDataLoadedRef.current = true;
+      personalDataLoadedRef.current = false; // Reset personal data loaded flag
       loadDemoAccountData();
-    } else if (!isDemoAccountSelected) {
-      // Reset demo data loaded flag when switching away from demo account
-      demoDataLoadedRef.current = false;
+    } else if (!isDemoAccountSelected && !personalDataLoadedRef.current) {
+      // Load personal account data when personal account is selected (only once)
+      console.log('Loading personal account data...');
+      personalDataLoadedRef.current = true;
+      demoDataLoadedRef.current = false; // Reset demo data loaded flag
+      // Only query existing account settings if username is at least 6 characters long
+      if (currentAccountConfig.username && currentAccountConfig.username.length >= 6) {
+        loadAccountSettings();
+      }
     }
-  }, [isDemoAccountSelected, loadDemoAccountData]);
+  }, [isDemoAccountSelected, loadDemoAccountData, loadAccountSettings, currentAccountConfig.username]);
+
+  // Synchronize parent state with hook state when hook state changes
+  React.useEffect(() => {
+    if (currentAccountConfig.username && !isDemoAccountSelected) {
+      setAccountConfig(currentAccountConfig);
+    }
+  }, [currentAccountConfig, setAccountConfig, isDemoAccountSelected]);
+
+  // Load account data when username changes (for personal accounts)
+  React.useEffect(() => {
+    // Only query existing account data if username is at least 6 characters long and not empty
+    if (currentAccountConfig.username && 
+        currentAccountConfig.username.length >= 6 && 
+        !isDemoAccountSelected && 
+        !personalDataLoadedRef.current) {
+      
+      // Add a small delay to prevent API calls while user is still typing
+      const timer = setTimeout(() => {
+        console.log('Username changed, querying existing account data for:', currentAccountConfig.username);
+        personalDataLoadedRef.current = true;
+        // This will query existing account data, not create a new account
+        loadAccountSettings();
+      }, 500); // 500ms delay
+      
+      return () => clearTimeout(timer);
+    }
+  }, [currentAccountConfig.username, isDemoAccountSelected, loadAccountSettings]);
 
   // Handle switching between account types
   const handleDemoAccountSelectionChange = (isSelected: boolean) => {
@@ -84,9 +128,11 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
         };
         
         setCurrentAccountConfig(emptyPersonalConfig);
+        setAccountConfig(emptyPersonalConfig);
         
         // Reset demo data loaded flag
         demoDataLoadedRef.current = false;
+        personalDataLoadedRef.current = false;
       }
     }
   };
@@ -120,17 +166,41 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       
       // Reset demo data loaded flag
       demoDataLoadedRef.current = false;
+      personalDataLoadedRef.current = false;
     }
   };
 
   // Handle form submission with demo account restriction
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     if (currentAccountConfig.demoAccount) {
       e.preventDefault();
       setShowRestrictionPopup(true);
       return;
     }
-    saveAccountSettings(e);
+    
+    // Validate username using the new validation system
+    if (!usernameValidation.isValid) {
+      if (usernameValidation.error) {
+        alert(`Username validation failed: ${usernameValidation.error}`);
+      } else {
+        alert('Please enter a valid username before saving');
+      }
+      return;
+    }
+    
+    try {
+      // This will create a new account if it doesn't exist, or update existing account
+      const success = await saveAccountSettings(e);
+      if (success) {
+        // After successful save, reload the data from backend to confirm persistence
+        if (currentAccountConfig.username && !isDemoAccountSelected) {
+          console.log('Reloading account data after save to confirm persistence...');
+          await loadAccountSettings();
+        }
+      }
+    } catch (error) {
+      console.error('Error in form submission:', error);
+    }
   };
 
   // Handle input changes with demo account restriction
@@ -143,8 +213,10 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       return;
     }
     
-    // Update only the hook's state to avoid conflicts
-    setCurrentAccountConfig(prev => ({ ...prev, [field]: value }));
+    // Update both hook state and parent state to keep them synchronized
+    const updatedConfig = { ...currentAccountConfig, [field]: value };
+    setCurrentAccountConfig(updatedConfig);
+    setAccountConfig(updatedConfig);
   };
 
   if (isLoading) {
@@ -215,10 +287,39 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                 onChange={(e) => handleInputChange('username', e.target.value)}
                 className={`w-full p-2 text-sm md:text-base border rounded-lg ${
                   currentAccountConfig.demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                } ${
+                  !isDemoAccountSelected && currentAccountConfig.username && usernameValidation.isValid
+                    ? usernameValidation.exists 
+                      ? 'border-green-500 bg-green-50' 
+                      : 'border-blue-500 bg-blue-50'
+                    : !isDemoAccountSelected && currentAccountConfig.username && !usernameValidation.isValid && !usernameValidation.isChecking
+                      ? 'border-red-500 bg-red-50'
+                      : ''
                 }`}
                 disabled={currentAccountConfig.demoAccount}
                 placeholder={isDemoAccountSelected ? 'wangausx (Demo Account)' : 'Enter your username'}
               />
+              
+              {/* Username validation feedback */}
+              {!isDemoAccountSelected && currentAccountConfig.username && (
+                <div className="text-xs">
+                  {usernameValidation.isChecking && (
+                    <p className="text-blue-600">Checking username availability...</p>
+                  )}
+                  {!usernameValidation.isChecking && usernameValidation.canUseForApi && usernameValidation.exists && (
+                    <p className="text-green-600">✓ Username exists - loading account data</p>
+                  )}
+                  {!usernameValidation.isChecking && usernameValidation.isValid && !usernameValidation.canUseForApi && (
+                    <p className="text-blue-600">✓ Username available for new account (press Save to create)</p>
+                  )}
+                  {!usernameValidation.isChecking && !usernameValidation.isValid && usernameValidation.error && (
+                    <p className="text-red-600">✗ {usernameValidation.error}</p>
+                  )}
+                  {!usernameValidation.isChecking && currentAccountConfig.username.length < 6 && (
+                    <p className="text-gray-500">Enter at least 6 characters to validate username</p>
+                  )}
+                </div>
+              )}
             </div>
             <div className="space-y-1">
               <label className="text-xs md:text-sm font-medium">API Key</label>
@@ -256,7 +357,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                   currentAccountConfig.demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
                 disabled={currentAccountConfig.demoAccount}
-                placeholder={isDemoAccountSelected ? 'Demo account - not required' : 'Enter account balance'}
+                placeholder={isDemoAccountSelected ? 'Demo account - not required' : 'Will be retrieved from Alpaca platform'}
               />
             </div>
             <div className="space-y-1">
@@ -293,11 +394,17 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
               className={`md:col-span-2 w-full px-4 py-2 text-sm md:text-base rounded-lg text-white transition-colors ${
                 currentAccountConfig.demoAccount 
                   ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-blue-500 hover:bg-blue-600'
+                  : isLoading
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-blue-500 hover:bg-blue-600'
               }`}
-              disabled={currentAccountConfig.demoAccount}
+              disabled={currentAccountConfig.demoAccount || isLoading}
             >
-              {currentAccountConfig.demoAccount ? 'Changes Not Allowed (Demo Account)' : 'Save Settings'}
+              {currentAccountConfig.demoAccount 
+                ? 'Changes Not Allowed (Demo Account)' 
+                : isLoading 
+                  ? 'Loading...' 
+                  : 'Save Settings'}
             </button>
             <button
               type="button"

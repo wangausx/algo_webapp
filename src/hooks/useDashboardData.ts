@@ -13,9 +13,9 @@ export const useDashboardData = (
   const [initialPositions, setInitialPositions] = useState<OpenPosition[]>([]);
 
   const fetchInitialData = useCallback(async (): Promise<OpenPosition[]> => {
-    if (!username) {
+    if (!username || username.length < 6) {
       setIsLoading(false);
-      console.log('Username is empty or null. Skipping data fetch.');
+      console.log('Username is empty, null, or too short (< 6 chars). Skipping data fetch.');
       return [];
     }
 
@@ -78,6 +78,13 @@ export const useDashboardData = (
     try {
       setIsLoading(true);
       setError(null);
+
+      // Validate username length before proceeding
+      if (!username || username.length < 6) {
+        console.log('Username is empty, null, or too short (< 6 chars). Skipping data initialization.');
+        setIsLoading(false);
+        return [];
+      }
 
       console.log('Starting data initialization for user:', username);
 

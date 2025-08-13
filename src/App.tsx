@@ -8,6 +8,7 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { usePositions } from './hooks/usePositions';
 import { useOrders } from './hooks/useOrders';
 import { useAccount } from './hooks/useAccount';
+import { useAccountSettings } from './hooks/useAccountSettings';
 import { 
   loadUsername, 
   saveUsername, 
@@ -115,13 +116,37 @@ const AlgoTradingApp: React.FC = () => {
     }
   };
 
-  const { tradingStatus, toggleTrading } = useTrading(accountConfig.username);
+  // Get username validation from AccountSettings hook
+  const { usernameValidation } = useAccountSettings(accountConfig.username);
+  
+  // Only use validated usernames for API calls
+  // Additional check to ensure username can be used for API calls (exists in backend)
+  const validatedUsername = (
+    usernameValidation.canUseForApi && 
+    accountConfig.username && 
+    accountConfig.username.length >= 6 && 
+    !usernameValidation.isChecking
+  ) ? accountConfig.username : '';
+  
+  // Debug logging for username validation
+  console.log('Username validation state:', {
+    username: accountConfig.username,
+    usernameLength: accountConfig.username?.length,
+    isValid: usernameValidation.isValid,
+    isChecking: usernameValidation.isChecking,
+    exists: usernameValidation.exists,
+    canUseForApi: usernameValidation.canUseForApi,
+    error: usernameValidation.error,
+    validatedUsername
+  });
+
+  const { tradingStatus, toggleTrading } = useTrading(validatedUsername);
 
   const { 
     accountBalance,
     dailyPnL,
     refreshAccountData 
-  } = useAccount(accountConfig.username);
+  } = useAccount(validatedUsername);
 
   // Initialize hooks that need to be available app-wide
   const { 
@@ -131,18 +156,18 @@ const AlgoTradingApp: React.FC = () => {
     handlePositionDeletion,
     fetchClosedPositions,
     handleCancelPosition
-  } = usePositions(accountConfig.username, refreshAccountData);
-
+  } = usePositions(validatedUsername, refreshAccountData);
+  
   // Lift up orders state to app level
   const { 
     orders,
     handleOrderUpdate,
     fetchOrders 
-  } = useOrders(accountConfig.username);
+  } = useOrders(validatedUsername);
 
   // WebSocket connection at app level
   useWebSocket(
-    accountConfig.username,
+    validatedUsername,
     handlePositionUpdate,
     handleOrderUpdate,
     handlePositionDeletion
@@ -167,7 +192,7 @@ const AlgoTradingApp: React.FC = () => {
               {isLoadingSavedData ? (
                 <span className="text-blue-600">Loading saved data...</span>
               ) : accountConfig.username.trim() === '' ? (
-                'No account configured - Please set up your account'
+                'Please set up your account or select a demo account'
               ) : (
                 accountConfig.username
               )}
@@ -213,7 +238,7 @@ const AlgoTradingApp: React.FC = () => {
           <Dashboard
             tradingStatus={tradingStatus}
             toggleTrading={toggleTrading}
-            username={accountConfig.username}
+            username={validatedUsername}
             positions={positions}
             closedPositions={closedPositions}
             handleCancelPosition={handleCancelPosition}
@@ -239,7 +264,7 @@ const AlgoTradingApp: React.FC = () => {
 
         {activeTab === 'trade-settings' && (
           <TradeSettings
-            username={accountConfig.username}
+            username={validatedUsername}
             demoAccount={accountConfig.demoAccount}
           />
         )}
