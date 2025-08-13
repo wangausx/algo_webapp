@@ -12,7 +12,7 @@ export const useDashboardData = (
   const [error, setError] = useState<string | null>(null);
   const [initialPositions, setInitialPositions] = useState<OpenPosition[]>([]);
 
-  const fetchInitialData = useCallback(async () => {
+  const fetchInitialData = useCallback(async (): Promise<OpenPosition[]> => {
     if (!username) {
       setIsLoading(false);
       console.log('Username is empty or null. Skipping data fetch.');

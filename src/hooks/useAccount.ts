@@ -32,7 +32,7 @@ export const useAccount = (username: string) => {
     }
   }, [username]);
 
-  // Fetch account data when username changes
+  // Load account data when username changes
   useEffect(() => {
     if (username) {
       refreshAccountData();

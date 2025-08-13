@@ -1,38 +1,119 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, Settings as SettingsIcon, MessageCircle, TrendingUp } from 'lucide-react';
-import Chatbot from './components/Chatbot';
-import Settings, { AccountConfig } from './components/Settings'; 
+import { Menu, Settings as SettingsIcon, TrendingUp, User, Shield } from 'lucide-react';
+import AccountSettings, { AccountConfig } from './components/AccountSettings';
+import TradeSettings from './components/TradeSettings';
 import Dashboard from './components/Dashboard'; 
-import { useChatbot } from './hooks/useChatbot';
 import { useTrading } from './hooks/useTrading';
 import { useWebSocket } from './hooks/useWebSocket';
 import { usePositions } from './hooks/usePositions';
 import { useOrders } from './hooks/useOrders';
 import { useAccount } from './hooks/useAccount';
+import { 
+  loadUsername, 
+  saveUsername, 
+  loadDemoAccountSelection, 
+  saveDemoAccountSelection,
+  saveAccountConfig 
+} from './utils/storage';
 
 const AlgoTradingApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [currentConversationId, setCurrentConversationId] = useState(null);
-
-  const {
-    messages,
-    userInput,
-    setUserInput,
-    handleSendMessage,
-    startNewChat,
-    isLoading
-  } = useChatbot(currentConversationId);
+  const [isDemoAccountSelected, setIsDemoAccountSelected] = useState(false);
+  const [isLoadingSavedData, setIsLoadingSavedData] = useState(true);
 
   const [accountConfig, setAccountConfig] = useState<AccountConfig>({
-    username: 'wangausx',
+    username: '',
     apiKey: '',
     secretKey: '',
     brokerageType: 'paper',
     modelType: 'intraday_reversal',
     riskLevel: 'moderate',
-    balance: 0
+    balance: 0,
+    demoAccount: false
   });
+
+  // Load saved data from localStorage on startup
+  useEffect(() => {
+    const savedUsername = loadUsername();
+    const savedDemoSelection = loadDemoAccountSelection();
+    
+    if (savedUsername) {
+      setAccountConfig(prev => ({ ...prev, username: savedUsername }));
+    }
+    
+    if (savedDemoSelection) {
+      setIsDemoAccountSelected(savedDemoSelection);
+    }
+    
+    // Mark loading as complete
+    setIsLoadingSavedData(false);
+  }, []);
+
+  // Update demo account status when selection changes
+  useEffect(() => {
+    if (isDemoAccountSelected) {
+      setAccountConfig(prev => ({ ...prev, demoAccount: true }));
+    } else {
+      setAccountConfig(prev => ({ ...prev, demoAccount: false }));
+    }
+    
+    // Save demo account selection to localStorage
+    saveDemoAccountSelection(isDemoAccountSelected);
+  }, [isDemoAccountSelected]);
+
+  // Auto-set demo account selection when username is 'wangausx' (only on initial load)
+  useEffect(() => {
+    // Only auto-set demo account if we haven't loaded saved data yet
+    if (!isLoadingSavedData && accountConfig.username === 'wangausx' && !isDemoAccountSelected) {
+      setIsDemoAccountSelected(true);
+    }
+  }, [accountConfig.username, isDemoAccountSelected, isLoadingSavedData]);
+
+  // Save username to localStorage when it changes
+  useEffect(() => {
+    if (accountConfig.username) {
+      saveUsername(accountConfig.username);
+    }
+  }, [accountConfig.username]);
+
+  // Save full account config to localStorage when it changes
+  useEffect(() => {
+    if (accountConfig.username) {
+      saveAccountConfig(accountConfig);
+    }
+  }, [accountConfig]);
+
+  // Handle manual demo account selection changes
+  const handleDemoAccountSelectionChange = (isSelected: boolean) => {
+    setIsDemoAccountSelected(isSelected);
+    
+    if (isSelected) {
+      // Switching to demo account - set username to wangausx and load demo data
+      setAccountConfig(prev => ({
+        ...prev,
+        username: 'wangausx',
+        demoAccount: true
+      }));
+    } else {
+      // Switching to personal account - clear demo account data
+      localStorage.removeItem('algoTrading_demoAccountSelected');
+      localStorage.removeItem('algoTrading_username');
+      localStorage.removeItem('algoTrading_accountConfig');
+      
+      // Reset account config to empty personal account
+      setAccountConfig({
+        username: '',
+        apiKey: '',
+        secretKey: '',
+        brokerageType: 'paper',
+        modelType: 'intraday_reversal',
+        riskLevel: 'moderate',
+        balance: 0,
+        demoAccount: false
+      });
+    }
+  };
 
   const { tradingStatus, toggleTrading } = useTrading(accountConfig.username);
 
@@ -67,20 +148,14 @@ const AlgoTradingApp: React.FC = () => {
     handlePositionDeletion
   );
 
-  // Log when callbacks are recreated
+  // Load demo account data when demo account is selected
   useEffect(() => {
-    console.log('App component callbacks recreated:', {
-      hasPositionUpdate: !!handlePositionUpdate,
-      hasOrderUpdate: !!handleOrderUpdate,
-      hasPositionDeletion: !!handlePositionDeletion,
-      timestamp: new Date().toISOString()
-    });
-  }, [handlePositionUpdate, handleOrderUpdate, handlePositionDeletion]);
-
-  const handleNewChat = () => {
-    setCurrentConversationId(null);
-    startNewChat();
-  };
+    if (accountConfig.demoAccount && accountConfig.username === 'wangausx') {
+      // Demo account is selected, ensure all required data is loaded
+      console.log('Demo account selected, ensuring all data is loaded');
+      // The individual components will handle loading their respective demo data
+    }
+  }, [accountConfig.demoAccount, accountConfig.username]);
 
   return (
     <div className="flex flex-col md:flex-row h-screen bg-gray-100">
@@ -89,7 +164,13 @@ const AlgoTradingApp: React.FC = () => {
           <div>
             <h1 className="text-lg md:text-xl font-bold text-gray-800">Quant Auto-Trading</h1>
             <p className="text-sm text-gray-600 mt-1">
-              {accountConfig.username.trim() === '' ? 'No account set yet' : accountConfig.username}
+              {isLoadingSavedData ? (
+                <span className="text-blue-600">Loading saved data...</span>
+              ) : accountConfig.username.trim() === '' ? (
+                'No account configured - Please set up your account'
+              ) : (
+                accountConfig.username
+              )}
             </p>
           </div>
           <button className="md:hidden p-2" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
@@ -107,22 +188,22 @@ const AlgoTradingApp: React.FC = () => {
             Dashboard
           </button>
           <button
-            onClick={() => { setActiveTab('chat'); setMobileMenuOpen(false); }}
+            onClick={() => { setActiveTab('account-settings'); setMobileMenuOpen(false); }}
             className={`flex items-center w-full px-4 py-3 text-sm md:text-base ${
-              activeTab === 'chat' ? 'bg-blue-50 text-blue-600' : 'text-gray-600'
+              activeTab === 'account-settings' ? 'bg-blue-50 text-blue-600' : 'text-gray-600'
             }`}
           >
-            <MessageCircle className="w-4 h-4 md:w-5 md:h-5 mr-2" />
-            AI Chatbot
+            <User className="w-4 h-4 md:w-5 md:h-5 mr-2" />
+            Account Settings
           </button>
           <button
-            onClick={() => { setActiveTab('settings'); setMobileMenuOpen(false); }}
+            onClick={() => { setActiveTab('trade-settings'); setMobileMenuOpen(false); }}
             className={`flex items-center w-full px-4 py-3 text-sm md:text-base ${
-              activeTab === 'settings' ? 'bg-blue-50 text-blue-600' : 'text-gray-600'
+              activeTab === 'trade-settings' ? 'bg-blue-50 text-blue-600' : 'text-gray-600'
             }`}
           >
-            <SettingsIcon className="w-4 h-4 md:w-5 md:h-5 mr-2" />
-            Configuration
+            <Shield className="w-4 h-4 md:w-5 md:h-5 mr-2" />
+            Trade Settings
           </button>
         </nav>
       </div>
@@ -142,25 +223,24 @@ const AlgoTradingApp: React.FC = () => {
             refreshAccountData={refreshAccountData}
             orders={orders}
             fetchOrders={fetchOrders}
+            tradingMode={accountConfig.brokerageType}
+            demoAccount={accountConfig.demoAccount}
           />
         )}
 
-        {activeTab === 'chat' && (
-          <Chatbot
-            messages={messages}
-            userInput={userInput}
-            setUserInput={setUserInput}
-            handleSendMessage={handleSendMessage}
-            handleNewChat={handleNewChat}
-            isLoading={isLoading}
-          />
-        )}
-
-        {activeTab === 'settings' && (
-          <Settings
+        {activeTab === 'account-settings' && (
+          <AccountSettings
             accountConfig={accountConfig}
             setAccountConfig={setAccountConfig}
-            setParentAccountConfig={setAccountConfig}
+            isDemoAccountSelected={isDemoAccountSelected}
+            setIsDemoAccountSelected={handleDemoAccountSelectionChange}
+          />
+        )}
+
+        {activeTab === 'trade-settings' && (
+          <TradeSettings
+            username={accountConfig.username}
+            demoAccount={accountConfig.demoAccount}
           />
         )}
       </div>

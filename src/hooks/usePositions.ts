@@ -31,13 +31,13 @@ export const usePositions = (
             unrealizedPl: entry.unrealizedPl != null ? Number(entry.unrealizedPl) : 0,
           } as OpenPosition;
           
+          console.log('Mapped position:', mappedPosition);
           // Additional validation
           if (!mappedPosition.symbol) {
             console.warn('Position missing symbol:', entry);
             return null;
           }
           
-          console.log('Mapped position:', mappedPosition);
           return mappedPosition;
         }).filter((position: OpenPosition | null): position is OpenPosition => position !== null);
         
@@ -46,7 +46,8 @@ export const usePositions = (
         setPositions(positionArray);
         return positionArray;
       } else {
-        console.log('No open positions yet!');
+        console.log('No open positions found for user:', username);
+        setPositions([]);
         return [];
       }
     } catch (error) {
@@ -67,6 +68,11 @@ export const usePositions = (
     console.log('Positions state changed:', positions);
   }, [positions]);
 
+  // Update positions state when positions prop changes
+  useEffect(() => {
+    setPositions(positions);
+  }, [positions]);
+
   const fetchClosedPositions = useCallback(async () => {
     if (!username) return;
     
@@ -79,22 +85,19 @@ export const usePositions = (
         //console.log('Raw closed positions data from server:', closedPositionsData);
         
         const closedPositionsArray = closedPositionsData.map((entry: any) => ({
-          ...entry,
-          // The backend provides UTC dates, so we create a Date object which will automatically
-          // convert to local timezone when displayed
+          symbol: entry.symbol,
+          side: entry.side || 'long',
+          quantity: Number(entry.quantity) || 0,
+          entryPrice: Number(entry.entryPrice) || 0,
+          exitPrice: Number(entry.exitPrice) || 0,
+          realizedPl: Number(entry.realizedPl) || 0,
           closedAt: entry.closedAt ? new Date(entry.closedAt) : null,
-        })).filter((position: ClosedPosition) => {
-          const hasEssentialData = position.symbol && position.side;
-          if (!hasEssentialData) {
-            console.warn('Filtering out position missing essential data:', position);
-          }
-          return hasEssentialData;
-        });
+        }));
         
         console.log('Final processed closed positions:', closedPositionsArray);
         setClosedPositions(closedPositionsArray);
       } else {
-        console.log('No closed positions yet!');
+        console.log('No closed positions found for user:', username);
         setClosedPositions([]);
       }
     } catch (error) {
@@ -120,11 +123,23 @@ export const usePositions = (
       const existingPositionIndex = prev.findIndex(
         (p) => p.symbol === positionUpdate.symbol && p.side === positionUpdate.side
       );
-      
+
+      // Check for duplicate updates by comparing key fields
+      const isDuplicate = existingPositionIndex !== -1 && 
+        prev[existingPositionIndex].quantity === positionUpdate.quantity &&
+        prev[existingPositionIndex].entryPrice === positionUpdate.entryPrice &&
+        prev[existingPositionIndex].currentPrice === positionUpdate.currentPrice &&
+        prev[existingPositionIndex].unrealizedPl === positionUpdate.unrealizedPl;
+
+      if (isDuplicate) {
+        console.log('Duplicate position update detected, skipping');
+        return prev;
+      }
+
       const newPosition = {
         symbol: positionUpdate.symbol,
         side: positionUpdate.side,
-        quantity: Math.abs(Number(positionUpdate.quantity)),
+        quantity: Number(positionUpdate.quantity) || 0,
         entryPrice: Number(positionUpdate.entryPrice) || 0,
         currentPrice: positionUpdate.currentPrice != null ? Number(positionUpdate.currentPrice) : null,
         unrealizedPl: positionUpdate.unrealizedPl != null ? Number(positionUpdate.unrealizedPl) : 0,
@@ -141,9 +156,8 @@ export const usePositions = (
         newPositions = [...prev];
         newPositions[existingPositionIndex] = {
           ...newPositions[existingPositionIndex],
-          ...newPosition,
-          quantity: newPosition.quantity || newPositions[existingPositionIndex].quantity,
-          entryPrice: newPosition.entryPrice || newPositions[existingPositionIndex].entryPrice,
+          quantity: newPosition.quantity,
+          entryPrice: newPosition.entryPrice,
           currentPrice: newPosition.currentPrice ?? newPositions[existingPositionIndex].currentPrice,
           unrealizedPl: newPosition.unrealizedPl ?? newPositions[existingPositionIndex].unrealizedPl,
         };
@@ -164,48 +178,28 @@ export const usePositions = (
       const closedPosition = prev.find((p) => p.symbol === symbol);
       
       if (closedPosition) {
-        setClosedPositions(prevClosed => {
-          const FIVE_MINUTES_MS = 5 * 60 * 1000;
-          const currentTime = new Date().getTime();
+        // Add to closed positions
+        setClosedPositions((prevClosed) => {
+          const closedPositionEntry = {
+            symbol: closedPosition.symbol,
+            side: closedPosition.side,
+            quantity: closedPosition.quantity,
+            entryPrice: closedPosition.entryPrice,
+            exitPrice: closedPosition.currentPrice || closedPosition.entryPrice,
+            realizedPl: closedPosition.unrealizedPl || 0,
+            closedAt: new Date(),
+          };
           
-          const isAlreadyClosed = prevClosed.some(
-            p => p.symbol === closedPosition.symbol && 
-                 p.side === closedPosition.side &&
-                 p.entryPrice === closedPosition.entryPrice &&
-                 p.quantity === closedPosition.quantity &&
-                 p.closedAt && 
-                 Math.abs(p.closedAt.getTime() - currentTime) < FIVE_MINUTES_MS
-          );
-          
-          if (!isAlreadyClosed) {
-            const closedPositionEntry: ClosedPosition = {
-              symbol: closedPosition.symbol,
-              side: closedPosition.side,
-              quantity: closedPosition.quantity,
-              entryPrice: closedPosition.entryPrice,
-              exitPrice: closedPosition.currentPrice ?? 0,
-              realizedPl: closedPosition.unrealizedPl ?? 0,
-              closedAt: new Date(),
-            };
-            
-            console.log('Adding closed position:', closedPositionEntry);
-            return [...prevClosed, closedPositionEntry];
-          }
-          
-          return prevClosed;
+          console.log('Adding closed position:', closedPositionEntry);
+          return [...prevClosed, closedPositionEntry];
         });
-
-        // Refresh closed positions from server after local update
-        fetchClosedPositions();
-        // Refresh account data after position deletion
-        refreshAccountData?.();
       }
       
       const updated = prev.filter((p) => p.symbol !== symbol);
       console.log('Updated open positions after deletion:', updated);
       return updated;
     });
-  }, [fetchClosedPositions, refreshAccountData]);
+  }, []);
 
   const handleCancelPosition = useCallback(async (symbol: string, side: 'long' | 'short') => {
     if (!username) return;

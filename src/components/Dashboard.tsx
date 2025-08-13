@@ -46,6 +46,8 @@ interface DashboardProps {
   refreshAccountData: () => Promise<void>;
   orders: StockOrder[];
   fetchOrders: () => Promise<void>;
+  tradingMode?: 'paper' | 'live';
+  demoAccount?: boolean;
 }
 
 const Dashboard: React.FC<DashboardProps> = React.memo(({ 
@@ -60,7 +62,9 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
   dailyPnL,
   refreshAccountData,
   orders,
-  fetchOrders
+  fetchOrders,
+  tradingMode = 'paper',
+  demoAccount = false
 }) => {
   // Debug: Log positions prop
   console.log('Dashboard received positions prop:', positions);
@@ -81,6 +85,11 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
   );
 
   const handleStopTrading = () => {
+    // Prevent demo account users from stopping trading
+    if (demoAccount) {
+      return;
+    }
+    
     if (positions.length > 0) {
       setShowStopConfirmation(true);
     } else {
@@ -96,7 +105,12 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
   }, [username, initializeData]);
 
   if (!username) {
-    return <div>Your trading account is not configured yet! Please set your account and manage your trading allocations under Settings.</div>;
+    return (
+      <div className="text-center py-8">
+        <div className="text-gray-500 text-lg mb-4">Your trading account is not configured yet!</div>
+        <div className="text-gray-600">Please go to Account Settings to configure your account and manage your trading allocations.</div>
+      </div>
+    );
   }
 
   if (isLoading) return <div>Loading...</div>;
@@ -146,7 +160,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
             <CardTitle className="text-sm md:text-base">Trading Status</CardTitle>
           </CardHeader>
           <CardContent className="p-3 md:p-4">
-            <div className="flex items-center justify-between space-x-2">
+            <div className="flex items-center justify-between space-x-2 mb-3">
               <span className={`text-sm px-2 py-1 rounded ${
                 tradingStatus === 'running'
                   ? 'bg-green-100 text-green-800'
@@ -156,36 +170,49 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
               </span>
               <button
                 onClick={tradingStatus === 'running' ? handleStopTrading : toggleTrading}
-                className={`px-3 py-2 md:px-4 md:py-2 text-sm rounded-lg text-white ${
+                disabled={demoAccount && tradingStatus === 'running'}
+                className={`px-3 py-2 md:px-4 md:py-2 text-sm rounded-lg text-white transition-colors ${
                   tradingStatus === 'running'
-                    ? 'bg-red-500 hover:bg-red-600'
+                    ? demoAccount 
+                      ? 'bg-gray-400 cursor-not-allowed' 
+                      : 'bg-red-500 hover:bg-red-600'
                     : 'bg-green-500 hover:bg-green-600'
                 }`}
               >
                 {tradingStatus === 'running' ? 'Stop' : 'Start'}
               </button>
             </div>
+            <div className="text-xs md:text-sm text-gray-500 mt-2">
+              {tradingMode === 'paper' ? 'Paper Trading' : 'Live Trading'}
+            </div>
+            {demoAccount && tradingStatus === 'running' && (
+              <div className="text-xs text-gray-400 mt-1">
+                Demo account - Stop button disabled
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="w-full">
           <CardHeader className="p-3 md:p-4">
             <CardTitle className="text-sm md:text-base">Account Balance</CardTitle>
           </CardHeader>
           <CardContent className="p-3 md:p-4">
-            <div className="text-xl md:text-2xl font-bold">
+            <div className="text-xl md:text-2xl font-bold mb-3">
               ${accountBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </div>
-            <div className="text-xs md:text-sm text-gray-500">Demo Account</div>
+            <div className="text-xs md:text-sm text-gray-500">
+              {demoAccount ? 'Demo Account' : 'Personal Account'}
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="w-full">
           <CardHeader className="p-3 md:p-4">
             <CardTitle className="text-sm md:text-base">Today's P/L</CardTitle>
           </CardHeader>
           <CardContent className="p-3 md:p-4">
-            <div className={`text-xl md:text-2xl font-bold ${
+            <div className={`text-xl md:text-2xl font-bold mb-3 ${
               dailyPnL >= 0 ? 'text-green-600' : 'text-red-600'
             }`}>
               ${dailyPnL.toFixed(2)}

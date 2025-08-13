@@ -13,34 +13,36 @@ export const useOrders = (username: string) => {
       // console.log('Current orders state before update:', prev);
       
       const submittedAt = orderUpdate.submittedAt ? new Date(orderUpdate.submittedAt) : new Date();
-      const filledAt = orderUpdate.filledAt ? new Date(orderUpdate.filledAt) : undefined;
       
-      // Check if this order already exists by clientOrderId
-      const isDuplicate = orderUpdate.clientOrderId && 
-        prev.some(o => o.clientOrderId === orderUpdate.clientOrderId);
+      // Check for duplicate updates by comparing key fields
+      const isDuplicate = prev.some(
+        (order) => 
+          order.symbol === orderUpdate.symbol &&
+          order.side === orderUpdate.side &&
+          order.quantity === orderUpdate.quantity &&
+          order.status === orderUpdate.status &&
+          order.clientOrderId === orderUpdate.clientOrderId
+      );
 
       if (isDuplicate) {
         console.log('Duplicate order detected by clientOrderId, skipping update');
         return prev;
       }
 
-      // Remove any pending orders for the same symbol
-      const updated = prev.filter((o) => o.symbol !== orderUpdate.symbol || o.status !== 'pending');
-      
       const newOrder = {
         symbol: orderUpdate.symbol,
-        quantity: Number(orderUpdate.quantity) || 0,
-        filledQuantity: Number(orderUpdate.filledQuantity) || 0,
+        quantity: orderUpdate.quantity,
         side: orderUpdate.side,
         status: orderUpdate.status,
-        filledAvgPrice: Number(orderUpdate.filledAvgPrice) || undefined,
-        submittedAt: submittedAt,
-        filledAt: filledAt,
+        filledQuantity: orderUpdate.filledQuantity,
+        filledAvgPrice: orderUpdate.filledAvgPrice,
+        submittedAt,
+        filledAt: orderUpdate.filledAt,
         clientOrderId: orderUpdate.clientOrderId,
       } as StockOrder;
 
       console.log('New order to be added:', newOrder);
-      const updatedOrders = [...updated, newOrder];
+      const updatedOrders = [...prev, newOrder];
       // console.log('Updated orders array:', updatedOrders);
       
       return updatedOrders;
@@ -75,6 +77,7 @@ export const useOrders = (username: string) => {
           filledAt: order.filledAt ? new Date(order.filledAt) : undefined,
           clientOrderId: order.clientOrderId,
         } as StockOrder));
+        
         setOrders(ordersArray);
       } else {
         console.log('No orders found for user:', username);
@@ -87,7 +90,7 @@ export const useOrders = (username: string) => {
     }
   }, [username]);
 
-  // Fetch orders when username changes
+  // Load orders when username changes
   useEffect(() => {
     if (username) {
       fetchOrders();

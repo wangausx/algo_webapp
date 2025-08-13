@@ -55,8 +55,8 @@ const Settings: React.FC<SettingsProps> = ({ accountConfig: initialAccountConfig
     user_id: initialAccountConfig.username,
     subscribedSymbols: [],
     riskSettings: {
-      maxPositionSize: 1000,
-      riskPercentage: 2,
+      maxPositionSize: 10000,
+      riskPercentage: 15,
       maxDailyLoss: 500,
     }
   });
