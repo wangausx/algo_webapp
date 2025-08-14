@@ -9,6 +9,11 @@ export const usePositions = (
   const [positions, setPositions] = useState<OpenPosition[]>([]);
   const [closedPositions, setClosedPositions] = useState<ClosedPosition[]>([]);
 
+  // Debug: Monitor closedPositions state changes
+  useEffect(() => {
+    console.log(`[${new Date().toISOString()}] closedPositions state changed:`, closedPositions.length, 'positions:', closedPositions.map(p => `${p.symbol}-${p.side}`));
+  }, [closedPositions]);
+
   const fetchInitialPositions = useCallback(async () => {
     if (!username || username.length < 6) return;
     
@@ -76,6 +81,7 @@ export const usePositions = (
   const fetchClosedPositions = useCallback(async () => {
     if (!username || username.length < 6) return;
     
+    console.log(`[${new Date().toISOString()}] fetchClosedPositions called`);
     try {
       const closedPositionsRes = await fetch(buildApiUrl(`/router/closed-positions/${username}`));
       console.log('Closed positions response status:', closedPositionsRes.status, closedPositionsRes.ok);
@@ -94,8 +100,33 @@ export const usePositions = (
           closedAt: entry.closedAt ? new Date(entry.closedAt) : null,
         }));
         
-        console.log('Final processed closed positions:', closedPositionsArray);
-        setClosedPositions(closedPositionsArray);
+        console.log(`[${new Date().toISOString()}] Fetched ${closedPositionsArray.length} closed positions from server:`, closedPositionsArray.map((p: ClosedPosition) => `${p.symbol}-${p.side}`));
+        
+        // Use the existing duplicate detection pattern from handlePositionUpdate
+        setClosedPositions((prevClosedPositions) => {
+          // Check for duplicate updates by comparing key fields
+          const isDuplicate = prevClosedPositions.length === closedPositionsArray.length &&
+            closedPositionsArray.every((fetchedPos: ClosedPosition, index: number) => {
+              const existingPos = prevClosedPositions[index];
+              return existingPos && 
+                existingPos.symbol === fetchedPos.symbol &&
+                existingPos.side === fetchedPos.side &&
+                existingPos.quantity === fetchedPos.quantity &&
+                existingPos.entryPrice === fetchedPos.entryPrice &&
+                existingPos.exitPrice === fetchedPos.exitPrice &&
+                existingPos.realizedPl === fetchedPos.realizedPl &&
+                existingPos.closedAt?.getTime() === fetchedPos.closedAt?.getTime();
+            });
+
+          if (isDuplicate) {
+            console.log('Duplicate closed positions update detected, skipping');
+            return prevClosedPositions;
+          }
+
+          console.log('Updating closed positions state with new data');
+          return closedPositionsArray;
+        });
+        
       } else {
         console.log('No closed positions found for user:', username);
         setClosedPositions([]);
@@ -169,38 +200,29 @@ export const usePositions = (
     });
 
     // Refresh account data after position update
+    console.log('Calling refreshAccountData after position update');
     refreshAccountData?.();
   }, [refreshAccountData]);
 
+  // Handle position deletion from WebSocket notifications
+  // Note: We update the open positions state and then fetch updated closed positions from server
+  // This ensures data consistency and that closed positions are always up to date
   const handlePositionDeletion = useCallback((symbol: string) => {
     console.log('Position deletion received for symbol:', symbol);
     setPositions((prev) => {
-      const closedPosition = prev.find((p) => p.symbol === symbol);
-      
-      if (closedPosition) {
-        // Add to closed positions
-        setClosedPositions((prevClosed) => {
-          const closedPositionEntry = {
-            symbol: closedPosition.symbol,
-            side: closedPosition.side,
-            quantity: closedPosition.quantity,
-            entryPrice: closedPosition.entryPrice,
-            exitPrice: closedPosition.currentPrice || closedPosition.entryPrice,
-            realizedPl: closedPosition.unrealizedPl || 0,
-            closedAt: new Date(),
-          };
-          
-          console.log('Adding closed position:', closedPositionEntry);
-          return [...prevClosed, closedPositionEntry];
-        });
-      }
-      
       const updated = prev.filter((p) => p.symbol !== symbol);
       console.log('Updated open positions after deletion:', updated);
       return updated;
     });
-  }, []);
+    
+    // Automatically fetch updated closed positions from backend
+    // This ensures the closed positions data reflects the newly closed position
+    console.log('Triggering automatic fetch of closed positions after position deletion');
+    fetchClosedPositions();
+  }, [fetchClosedPositions]);
 
+  // Handle manual position cancellation (user clicks close button)
+  // This is the primary flow that updates both open and closed positions
   const handleCancelPosition = useCallback(async (symbol: string, side: 'long' | 'short') => {
     if (!username) return;
     
@@ -223,6 +245,7 @@ export const usePositions = (
       console.log(`Position close request sent for ${symbol} (${side})`);
       
       // Refresh closed positions after successful cancellation
+      console.log('Triggering fetch of closed positions after manual position cancellation');
       await fetchClosedPositions();
     } catch (error) {
       console.error('Error closing position:', error);

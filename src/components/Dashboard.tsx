@@ -323,8 +323,8 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
                       ) : (
                         [...closedPositions]
                           .sort((a, b) => (b.closedAt?.getTime() || 0) - (a.closedAt?.getTime() || 0))
-                          .map((position, index) => (
-                            <tr key={index} className="border-t">
+                          .map((position) => (
+                            <tr key={`${position.symbol}-${position.side}-${position.closedAt?.getTime() || 'unknown'}`} className="border-t">
                               <td className="p-2">{position.symbol}</td>
                               <td className="p-2 capitalize">{position.side}</td>
                               <td className="p-2">{position.quantity}</td>
@@ -389,8 +389,8 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
                       ) : (
                         [...orders]
                           .sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime())
-                          .map((order, index) => (
-                            <tr key={index} className="border-t">
+                          .map((order) => (
+                            <tr key={`${order.symbol}-${order.side}-${order.submittedAt.getTime()}-${order.clientOrderId || 'no-id'}`} className="border-t">
                               <td className="p-2">{order.symbol}</td>
                               <td className="p-2 capitalize">{order.side}</td>
                               <td className="p-2">{order.filledQuantity || '-'}</td>
