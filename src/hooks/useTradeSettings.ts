@@ -17,9 +17,9 @@ export const useTradeSettings = (username: string) => {
     user_id: username,
     subscribedSymbols: [],
     riskSettings: {
-      maxPositionSize: 10000,
-      riskPercentage: 15,
-      maxDailyLoss: 500,
+      max_leverage: 3,
+      riskPercentage: 1,
+      maxDailyLoss: 1500,
     }
   });
   
@@ -122,9 +122,9 @@ export const useTradeSettings = (username: string) => {
             { symbol: 'MSFT', isOption: 'no' }
           ],
           riskSettings: {
-            maxPositionSize: 10000,
-            riskPercentage: 2,
-            maxDailyLoss: 2000,
+            max_leverage: 3,
+            riskPercentage: 1,
+            maxDailyLoss: 1500,
           }
         });
       }
@@ -139,9 +139,9 @@ export const useTradeSettings = (username: string) => {
           { symbol: 'MSFT', isOption: 'no' }
         ],
         riskSettings: {
-          maxPositionSize: 10000,
-          riskPercentage: 2,
-          maxDailyLoss: 2000,
+          max_leverage: 3,
+          riskPercentage: 1,
+          maxDailyLoss: 1500,
         }
       });
     } finally {

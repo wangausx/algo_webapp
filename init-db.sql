@@ -107,6 +107,6 @@ ON CONFLICT (username) DO NOTHING;
 
 -- Insert default trade settings
 INSERT INTO trade_settings (user_id, trading_status, subscribed_symbols, risk_settings)
-SELECT id, 'stopped', '[]', '{"maxPositionSize": 10000, "riskPercentage": 15, "maxDailyLoss": 500}'
+SELECT id, 'stopped', '[]', '{"max_leverage": 3, "riskPercentage": 1, "maxDailyLoss": 1500}'
 FROM users WHERE username = 'wangausx'
 ON CONFLICT (user_id) DO NOTHING; 

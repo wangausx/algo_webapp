@@ -14,7 +14,7 @@ export interface TradeSetting {
   user_id: string;
   subscribedSymbols: SymbolConfig[];
   riskSettings: {
-    maxPositionSize: number;
+    max_leverage: number;
     riskPercentage: number;
     maxDailyLoss: number;
   };
@@ -324,26 +324,28 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
               <label className="text-xs md:text-sm font-medium">Risk Settings</label>
               <div className="grid md:grid-cols-3 gap-4">
                 {/* Max Position Size */}
-                <div className="space-y-1">
-                  <label className="text-xs md:text-sm">Max Position Size ($)</label>
-                  <input
-                    type="number"
-                    value={tradeSetting.riskSettings.maxPositionSize}
-                    onChange={(e) => handleFormChange(() => setTradeSetting(prev => ({
-                      ...prev,
-                      riskSettings: { ...prev.riskSettings, maxPositionSize: parseFloat(e.target.value) || 0 },
-                    })))}
-                    className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                      demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
-                    }`}
-                    min="0"
-                    disabled={demoAccount}
-                  />
-                </div>
+                                  <div className="space-y-1">
+                    <label className="text-xs md:text-sm">Max Leverage</label>
+                    <select
+                      value={tradeSetting.riskSettings.max_leverage}
+                      onChange={(e) => handleFormChange(() => setTradeSetting(prev => ({
+                        ...prev,
+                        riskSettings: { ...prev.riskSettings, max_leverage: parseInt(e.target.value, 10) || 3 },
+                      })))}
+                      className={`w-full p-2 text-sm md:text-base border rounded-lg ${
+                        demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                      }`}
+                      disabled={demoAccount}
+                    >
+                      <option value="2">2x</option>
+                      <option value="3">3x</option>
+                      <option value="4">4x</option>
+                    </select>
+                  </div>
 
                 {/* Risk Percentage */}
                 <div className="space-y-1">
-                  <label className="text-xs md:text-sm">Base Position Risk (%)</label>
+                  <label className="text-xs md:text-sm">Risk Pct Per Trade (%)</label>
                   <input
                     type="number"
                     value={tradeSetting.riskSettings.riskPercentage || ''}
