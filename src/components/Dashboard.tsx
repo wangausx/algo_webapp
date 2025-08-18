@@ -48,6 +48,14 @@ interface DashboardProps {
   fetchOrders: () => Promise<void>;
   tradingMode?: 'paper' | 'live';
   demoAccount?: boolean;
+  isLoadingSavedData?: boolean; // Add this prop to track if app is still loading saved data
+  usernameValidation?: {
+    isValid: boolean;
+    isChecking: boolean;
+    exists: boolean;
+    canUseForApi: boolean;
+    error: string | null;
+  };
 }
 
 const Dashboard: React.FC<DashboardProps> = React.memo(({ 
@@ -64,7 +72,15 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
   orders,
   fetchOrders,
   tradingMode = 'paper',
-  demoAccount = false
+  demoAccount = false,
+  isLoadingSavedData = false,
+  usernameValidation = {
+    isValid: false,
+    isChecking: false,
+    exists: false,
+    canUseForApi: false,
+    error: null
+  }
 }) => {
   // Debug: Log positions prop
   console.log('Dashboard received positions prop:', positions);
@@ -97,14 +113,70 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
     }
   };
 
-  // Initial data fetch - only for valid usernames (>= 6 characters)
+  // Initial data fetch - only for validated usernames that can be used for API calls
   useEffect(() => {
-    if (username && username.length >= 6) {
+    if (username && username.length >= 6 && usernameValidation?.canUseForApi && !usernameValidation.isChecking) {
       initializeData();
     }
-  }, [username, initializeData]);
+  }, [username, usernameValidation, initializeData]);
 
-  if (!username) {
+  // Show loading state while app is loading saved data
+  if (isLoadingSavedData) {
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <div className="text-gray-500 text-lg mb-4">Loading saved account data...</div>
+        <div className="text-gray-600">Please wait while we retrieve your account information.</div>
+      </div>
+    );
+  }
+
+  // Show loading state while waiting for username validation to start
+  if (username && username.length >= 6 && !usernameValidation) {
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <div className="text-gray-500 text-lg mb-4">Initializing account validation...</div>
+        <div className="text-gray-600">Please wait while we set up your account.</div>
+      </div>
+    );
+  }
+
+  // Show loading state while username validation is in progress
+  if (username && username.length >= 6 && usernameValidation?.isChecking) {
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <div className="text-gray-500 text-lg mb-4">Validating account credentials...</div>
+        <div className="text-gray-600">Please wait while we verify your account access.</div>
+      </div>
+    );
+  }
+
+  // Show loading state while waiting for username to be validated for API calls
+  if (username && username.length >= 6 && !usernameValidation?.canUseForApi && !usernameValidation?.isChecking) {
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <div className="text-gray-500 text-lg mb-4">Setting up account access...</div>
+        <div className="text-gray-600">Please wait while we prepare your trading dashboard.</div>
+      </div>
+    );
+  }
+
+  // Show error if username validation failed
+  if (username && username.length >= 6 && usernameValidation?.error && !usernameValidation.isChecking) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-red-500 text-lg mb-4">Account validation failed</div>
+        <div className="text-gray-600 mb-4">{usernameValidation.error}</div>
+        <div className="text-gray-600">Please check your account settings and try again.</div>
+      </div>
+    );
+  }
+
+  // Only show "not configured" if there's actually no username
+  if (!username || username.length < 6) {
     return (
       <div className="text-center py-8">
         <div className="text-gray-500 text-lg mb-4">Your trading account is not configured yet!</div>
@@ -113,7 +185,16 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
     );
   }
 
-  if (isLoading) return <div>Loading...</div>;
+  // Show loading state while dashboard data is being fetched
+  if (isLoading) {
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <div className="text-gray-500 text-lg mb-4">Loading dashboard data...</div>
+        <div className="text-gray-600">Please wait while we fetch your trading information.</div>
+      </div>
+    );
+  }
 
   if (error) {
     return (

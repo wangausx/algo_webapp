@@ -238,7 +238,7 @@ const AlgoTradingApp: React.FC = () => {
           <Dashboard
             tradingStatus={tradingStatus}
             toggleTrading={toggleTrading}
-            username={validatedUsername}
+            username={accountConfig.username}
             positions={positions}
             closedPositions={closedPositions}
             handleCancelPosition={handleCancelPosition}
@@ -250,6 +250,8 @@ const AlgoTradingApp: React.FC = () => {
             fetchOrders={fetchOrders}
             tradingMode={accountConfig.brokerageType}
             demoAccount={accountConfig.demoAccount}
+            isLoadingSavedData={isLoadingSavedData}
+            usernameValidation={usernameValidation}
           />
         )}
 
