@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { OpenPosition, ClosedPosition } from '../components/Dashboard';
 import { buildApiUrl } from '../config/api';
+import { convertBackendTimeToLocal, logTimeConversion } from '../lib/utils';
 
 export const usePositions = (
   username: string,
@@ -90,15 +91,22 @@ export const usePositions = (
         const closedPositionsData = await closedPositionsRes.json();
         //console.log('Raw closed positions data from server:', closedPositionsData);
         
-        const closedPositionsArray = closedPositionsData.map((entry: any) => ({
-          symbol: entry.symbol,
-          side: entry.side || 'long',
-          quantity: Number(entry.quantity) || 0,
-          entryPrice: Number(entry.entryPrice) || 0,
-          exitPrice: Number(entry.exitPrice) || 0,
-          realizedPl: Number(entry.realizedPl) || 0,
-          closedAt: entry.closedAt ? new Date(entry.closedAt) : null,
-        }));
+        const closedPositionsArray = closedPositionsData.map((entry: any) => {
+          const closedAt = entry.closedAt ? convertBackendTimeToLocal(entry.closedAt) : null;
+          
+          // Create a deep clone to prevent any object reference issues
+          const safeClosedAt = closedAt ? new Date(closedAt.getTime()) : null;
+          
+          return {
+            symbol: entry.symbol,
+            side: entry.side || 'long',
+            quantity: Number(entry.quantity) || 0,
+            entryPrice: Number(entry.entryPrice) || 0,
+            exitPrice: Number(entry.exitPrice) || 0,
+            realizedPl: Number(entry.realizedPl) || 0,
+            closedAt: safeClosedAt,
+          };
+        });
         
         console.log(`[${new Date().toISOString()}] Fetched ${closedPositionsArray.length} closed positions from server:`, closedPositionsArray.map((p: ClosedPosition) => `${p.symbol}-${p.side}`));
         

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { useDashboardData } from '../hooks/useDashboardData';
+import { formatDateWithOptions } from '../lib/utils';
 
 export interface OpenPosition {
   symbol: string;
@@ -416,9 +417,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
                               }`}>
                                 ${position.realizedPl.toFixed(2)}
                               </td>
-                              <td className="p-2">{position.closedAt ? position.closedAt.toLocaleString(undefined, {
-                                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-                              }) : 'Unknown'}</td>
+                              <td className="p-2">{position.closedAt ? formatDateWithOptions(position.closedAt, 'short') : 'Unknown'}</td>
                             </tr>
                           ))
                       )}
@@ -476,8 +475,8 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
                               <td className="p-2 capitalize">{order.side}</td>
                               <td className="p-2">{order.filledQuantity || '-'}</td>
                               <td className="p-2">{order.filledAvgPrice ? `$${order.filledAvgPrice.toFixed(2)}` : '-'}</td>
-                              <td className="p-2">{order.submittedAt.toLocaleString()}</td>
-                              <td className="p-2">{order.filledAt ? order.filledAt.toLocaleString() : '-'}</td>
+                              <td className="p-2">{formatDateWithOptions(order.submittedAt, 'short')}</td>
+                              <td className="p-2">{order.filledAt ? formatDateWithOptions(order.filledAt, 'short') : '-'}</td>
                             </tr>
                           ))
                       )}

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { StockOrder } from '../components/Dashboard';
 import { buildApiUrl } from '../config/api';
+import { convertBackendTimeToLocal, logTimeConversion } from '../lib/utils';
 
 export const useOrders = (username: string) => {
   const [orders, setOrders] = useState<StockOrder[]>([]);
@@ -12,7 +13,8 @@ export const useOrders = (username: string) => {
     setOrders((prev) => {
       // console.log('Current orders state before update:', prev);
       
-      const submittedAt = orderUpdate.submittedAt ? new Date(orderUpdate.submittedAt) : new Date();
+      const submittedAt = orderUpdate.submittedAt ? convertBackendTimeToLocal(orderUpdate.submittedAt) : new Date();
+      const filledAt = orderUpdate.filledAt ? convertBackendTimeToLocal(orderUpdate.filledAt) : undefined;
       
       // Check for duplicate updates by comparing key fields
       const isDuplicate = prev.some(
@@ -37,7 +39,7 @@ export const useOrders = (username: string) => {
         filledQuantity: orderUpdate.filledQuantity,
         filledAvgPrice: orderUpdate.filledAvgPrice,
         submittedAt,
-        filledAt: orderUpdate.filledAt,
+        filledAt,
         clientOrderId: orderUpdate.clientOrderId,
       } as StockOrder;
 
@@ -66,17 +68,22 @@ export const useOrders = (username: string) => {
         const ordersArray = (Array.isArray(ordersData)
           ? ordersData
           : ordersData.orders || []
-        ).map((order: any) => ({
-          symbol: order.symbol,
-          quantity: Number(order.quantity) || 0,
-          filledQuantity: Number(order.filledQuantity) || undefined,
-          side: order.side,
-          status: order.status,
-          filledAvgPrice: Number(order.filledAvgPrice) || undefined,
-          submittedAt: order.submittedAt ? new Date(order.submittedAt) : new Date(),
-          filledAt: order.filledAt ? new Date(order.filledAt) : undefined,
-          clientOrderId: order.clientOrderId,
-        } as StockOrder));
+        ).map((order: any) => {
+          const submittedAt = order.submittedAt ? convertBackendTimeToLocal(order.submittedAt) : new Date();
+          const filledAt = order.filledAt ? convertBackendTimeToLocal(order.filledAt) : undefined;
+          
+          return {
+            symbol: order.symbol,
+            quantity: Number(order.quantity) || 0,
+            filledQuantity: Number(order.filledQuantity) || undefined,
+            side: order.side,
+            status: order.status,
+            filledAvgPrice: Number(order.filledAvgPrice) || undefined,
+            submittedAt,
+            filledAt,
+            clientOrderId: order.clientOrderId,
+          } as StockOrder;
+        });
         
         setOrders(ordersArray);
       } else {
