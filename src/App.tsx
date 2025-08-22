@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Menu, Settings as SettingsIcon, TrendingUp, User, Shield } from 'lucide-react';
 import AccountSettings, { AccountConfig } from './components/AccountSettings';
 import TradeSettings from './components/TradeSettings';
@@ -166,12 +166,22 @@ const AlgoTradingApp: React.FC = () => {
   } = useOrders(validatedUsername);
 
   // WebSocket connection at app level
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   const handleWebSocketReconnect = useCallback(() => {
-    console.log('WebSocket reconnected, refreshing all data');
-    // Refresh all data when WebSocket reconnects
-    refreshAccountData();
-    fetchClosedPositions();
-    fetchOrders();
+    console.log('WebSocket reconnected, scheduling data refresh');
+    
+    // Debounce the refresh to prevent multiple rapid calls
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+    
+    reconnectTimeoutRef.current = setTimeout(() => {
+      console.log('Executing WebSocket reconnection data refresh');
+      refreshAccountData();
+      fetchClosedPositions();
+      fetchOrders();
+    }, 2000); // 2 second debounce
   }, [refreshAccountData, fetchClosedPositions, fetchOrders]);
 
   useWebSocket(

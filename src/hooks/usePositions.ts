@@ -145,12 +145,12 @@ export const usePositions = (
     }
   }, [username]);
 
-  // Fetch closed positions when username changes - only for valid usernames (>= 6 characters)
-  useEffect(() => {
-    if (username && username.length >= 6) {
-      fetchClosedPositions();
-    }
-  }, [username, fetchClosedPositions]);
+  // Remove duplicate username effect - consolidated refresh mechanism handles this
+  // useEffect(() => {
+  //   if (username && username.length >= 6) {
+  //     fetchClosedPositions();
+  //   }
+  // }, [username, fetchClosedPositions]);
 
   const handlePositionUpdate = useCallback((positionUpdate: OpenPosition) => {
     //console.log('handlePositionUpdate callback created');
@@ -261,46 +261,12 @@ export const usePositions = (
     }
   }, [username, fetchClosedPositions]);
 
-  // Refresh closed positions periodically
-  useEffect(() => {
-    if (username) {
-      // Refresh every 2 minutes to ensure data consistency
-      const interval = setInterval(fetchClosedPositions, 120000);
-      return () => clearInterval(interval);
-    }
-  }, [username, fetchClosedPositions]);
-
-  // Smart refresh mechanism - adjust intervals based on trading hours and activity
+  // Separate mechanism for refreshing open positions
   useEffect(() => {
     if (!username) return;
 
-    const isTradingHours = () => {
-      const now = new Date();
-      const hour = now.getHours();
-      const day = now.getDay();
-      
-      // Monday to Friday, 9:30 AM to 4:00 PM EST (market hours)
-      // Adjust these times based on your timezone and trading preferences
-      return day >= 1 && day <= 5 && hour >= 9 && hour < 16;
-    };
-
-    const getRefreshInterval = () => {
-      if (isTradingHours()) {
-        // During trading hours: more frequent updates
-        return 60000; // 1 minute
-      } else {
-        // Outside trading hours: less frequent updates
-        return 3000000; // 50 minutes
-      }
-    };
-
-    const interval = setInterval(async () => {
+    const refreshOpenPositions = async () => {
       try {
-        // Only refresh if page is visible and user is active
-        if (!document.hidden && !document.hasFocus()) {
-          return;
-        }
-
         const response = await fetch(buildApiUrl(`/router/positions/${username}`));
         if (response.ok) {
           const positionData = await response.json();
@@ -317,31 +283,74 @@ export const usePositions = (
           } as OpenPosition));
           
           setPositions(positionArray);
-          console.log('Smart refresh: Updated positions from backend');
+          console.log('Open positions refresh: Updated from backend');
         }
       } catch (error) {
-        console.warn('Smart position refresh failed:', error);
+        console.warn('Open positions refresh failed:', error);
       }
-    }, getRefreshInterval());
+    };
 
+    // Refresh open positions every 3 minutes
+    const interval = setInterval(refreshOpenPositions, 180000);
+    
     return () => clearInterval(interval);
   }, [username]);
 
-  // Handle page visibility changes to refresh data when user returns
+  // Consolidated refresh mechanism with debouncing
   useEffect(() => {
+    if (!username) return;
+
+    let refreshTimeout: NodeJS.Timeout;
+    let isRefreshing = false;
+
+    const debouncedRefresh = () => {
+      if (isRefreshing) return; // Prevent concurrent refreshes
+      
+      clearTimeout(refreshTimeout);
+      refreshTimeout = setTimeout(async () => {
+        if (isRefreshing) return;
+        
+        isRefreshing = true;
+        try {
+          await fetchClosedPositions();
+        } finally {
+          isRefreshing = false;
+        }
+      }, 1000); // 1 second debounce
+    };
+
+    const isTradingHours = () => {
+      const now = new Date();
+      const hour = now.getHours();
+      const day = now.getDay();
+      
+      // Monday to Friday, 9:30 AM to 4:00 PM EST (market hours)
+      return day >= 1 && day <= 5 && hour >= 9 && hour < 16;
+    };
+
+    const getRefreshInterval = () => {
+      if (isTradingHours()) {
+        return 1000000; // 10 minutes during trading hours
+      } else {
+        return 6000000; // 60 minutes outside trading hours
+      }
+    };
+
+    // Periodic refresh with smart intervals
+    const interval = setInterval(debouncedRefresh, getRefreshInterval());
+
+    // Page visibility and focus handlers with debouncing
     const handleVisibilityChange = () => {
       if (!document.hidden && username) {
-        console.log('Page became visible, refreshing position data');
-        fetchClosedPositions();
-        refreshAccountData?.();
+        console.log('Page became visible, scheduling position data refresh');
+        debouncedRefresh();
       }
     };
 
     const handleFocus = () => {
       if (username) {
-        console.log('Window focused, refreshing position data');
-        fetchClosedPositions();
-        refreshAccountData?.();
+        console.log('Window focused, scheduling position data refresh');
+        debouncedRefresh();
       }
     };
 
@@ -349,10 +358,12 @@ export const usePositions = (
     window.addEventListener('focus', handleFocus);
 
     return () => {
+      clearInterval(interval);
+      clearTimeout(refreshTimeout);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [username, fetchClosedPositions, refreshAccountData]);
+  }, [username, fetchClosedPositions]);
 
   return {
     positions,
