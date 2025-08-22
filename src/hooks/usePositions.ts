@@ -262,12 +262,97 @@ export const usePositions = (
   }, [username, fetchClosedPositions]);
 
   // Refresh closed positions periodically
-  //useEffect(() => {
-  //  if (username) {
-  //    const interval = setInterval(fetchClosedPositions, 60000); // Refresh every minute
-  //    return () => clearInterval(interval);
-  //  }
-  //}, [username, fetchClosedPositions]);
+  useEffect(() => {
+    if (username) {
+      // Refresh every 2 minutes to ensure data consistency
+      const interval = setInterval(fetchClosedPositions, 120000);
+      return () => clearInterval(interval);
+    }
+  }, [username, fetchClosedPositions]);
+
+  // Smart refresh mechanism - adjust intervals based on trading hours and activity
+  useEffect(() => {
+    if (!username) return;
+
+    const isTradingHours = () => {
+      const now = new Date();
+      const hour = now.getHours();
+      const day = now.getDay();
+      
+      // Monday to Friday, 9:30 AM to 4:00 PM EST (market hours)
+      // Adjust these times based on your timezone and trading preferences
+      return day >= 1 && day <= 5 && hour >= 9 && hour < 16;
+    };
+
+    const getRefreshInterval = () => {
+      if (isTradingHours()) {
+        // During trading hours: more frequent updates
+        return 60000; // 1 minute
+      } else {
+        // Outside trading hours: less frequent updates
+        return 3000000; // 50 minutes
+      }
+    };
+
+    const interval = setInterval(async () => {
+      try {
+        // Only refresh if page is visible and user is active
+        if (!document.hidden && !document.hasFocus()) {
+          return;
+        }
+
+        const response = await fetch(buildApiUrl(`/router/positions/${username}`));
+        if (response.ok) {
+          const positionData = await response.json();
+          const positionArray = (Array.isArray(positionData)
+            ? positionData
+            : positionData.positions || []
+          ).map((entry: any) => ({
+            symbol: entry.symbol,
+            side: entry.side || 'long',
+            quantity: Number(entry.quantity) || 0,
+            entryPrice: Number(entry.entryPrice) || 0,
+            currentPrice: entry.currentPrice != null ? Number(entry.currentPrice) : null,
+            unrealizedPl: entry.unrealizedPl != null ? Number(entry.unrealizedPl) : 0,
+          } as OpenPosition));
+          
+          setPositions(positionArray);
+          console.log('Smart refresh: Updated positions from backend');
+        }
+      } catch (error) {
+        console.warn('Smart position refresh failed:', error);
+      }
+    }, getRefreshInterval());
+
+    return () => clearInterval(interval);
+  }, [username]);
+
+  // Handle page visibility changes to refresh data when user returns
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && username) {
+        console.log('Page became visible, refreshing position data');
+        fetchClosedPositions();
+        refreshAccountData?.();
+      }
+    };
+
+    const handleFocus = () => {
+      if (username) {
+        console.log('Window focused, refreshing position data');
+        fetchClosedPositions();
+        refreshAccountData?.();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [username, fetchClosedPositions, refreshAccountData]);
 
   return {
     positions,

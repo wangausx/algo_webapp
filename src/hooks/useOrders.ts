@@ -104,6 +104,40 @@ export const useOrders = (username: string) => {
     }
   }, [username, fetchOrders]);
 
+  // Periodic refresh of orders data
+  // useEffect(() => {
+  //   if (username) {
+  //     // Refresh orders every 4 minutes as a fallback
+  //     const interval = setInterval(fetchOrders, 240000);
+  //     return () => clearInterval(interval);
+  //   }
+  // }, [username, fetchOrders]);
+
+  // Handle page visibility changes to refresh data when user returns
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && username) {
+        console.log('Page became visible, refreshing orders data');
+        fetchOrders();
+      }
+    };
+
+    const handleFocus = () => {
+      if (username) {
+        console.log('Window focused, refreshing orders data');
+        fetchOrders();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [username, fetchOrders]);
+
   return {
     orders,
     handleOrderUpdate,

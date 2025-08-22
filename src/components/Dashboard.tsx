@@ -309,7 +309,27 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
       {/* Positions Table */}
       <Card className="max-h-[40vh] overflow-y-auto">
         <CardHeader className="p-3 md:p-4 sticky top-0 bg-white z-10">
-          <CardTitle className="text-sm md:text-base">Open Positions for Today</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm md:text-base">Open Positions for Today</CardTitle>
+            <button
+              onClick={async () => {
+                try {
+                  await Promise.all([
+                    refreshAccountData(),
+                    fetchClosedPositions(),
+                    fetchOrders()
+                  ]);
+                  console.log('Manual refresh completed');
+                } catch (error) {
+                  console.error('Manual refresh failed:', error);
+                }
+              }}
+              className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+              title="Refresh all data"
+            >
+              ↻ Refresh
+            </button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">

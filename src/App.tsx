@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Menu, Settings as SettingsIcon, TrendingUp, User, Shield } from 'lucide-react';
 import AccountSettings, { AccountConfig } from './components/AccountSettings';
 import TradeSettings from './components/TradeSettings';
@@ -166,11 +166,21 @@ const AlgoTradingApp: React.FC = () => {
   } = useOrders(validatedUsername);
 
   // WebSocket connection at app level
+  const handleWebSocketReconnect = useCallback(() => {
+    console.log('WebSocket reconnected, refreshing all data');
+    // Refresh all data when WebSocket reconnects
+    refreshAccountData();
+    fetchClosedPositions();
+    fetchOrders();
+  }, [refreshAccountData, fetchClosedPositions, fetchOrders]);
+
   useWebSocket(
     validatedUsername,
     handlePositionUpdate,
     handleOrderUpdate,
-    handlePositionDeletion
+    handlePositionDeletion,
+    undefined, // onWarning
+    handleWebSocketReconnect
   );
 
   // Load demo account data when demo account is selected

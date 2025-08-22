@@ -49,6 +49,40 @@ export const useAccount = (username: string) => {
     }
   }, [username, refreshAccountData]);
 
+  // Periodic refresh of account data
+  useEffect(() => {
+    if (username && username.length >= 6) {
+      // Refresh account data every 3 minutes as a fallback
+      const interval = setInterval(refreshAccountData, 180000);
+      return () => clearInterval(interval);
+    }
+  }, [username, refreshAccountData]);
+
+  // Handle page visibility changes to refresh data when user returns
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && username && username.length >= 6) {
+        console.log('Page became visible, refreshing account data');
+        refreshAccountData();
+      }
+    };
+
+    const handleFocus = () => {
+      if (username && username.length >= 6) {
+        console.log('Window focused, refreshing account data');
+        refreshAccountData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [username, refreshAccountData]);
+
   return {
     accountBalance,
     dailyPnL,

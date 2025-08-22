@@ -29,7 +29,8 @@ export function useWebSocket(
   onPositionUpdate: (payload: OpenPosition) => void,
   onStockOrder?: (payload: StockOrder) => void,
   onPositionDeletion?: (symbol: string) => void,
-  onWarning?: (message: string) => void
+  onWarning?: (message: string) => void,
+  onReconnect?: () => void
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -125,6 +126,12 @@ export function useWebSocket(
           ws.send(JSON.stringify(subscribeMessage));
           console.log('User subscribed to WebSocket:', userId);
           isSubscribed.current = true;
+          
+          // Trigger reconnection callback to refresh data
+          if (onReconnect && reconnectAttempts.current > 0) {
+            console.log('WebSocket reconnected, triggering data refresh');
+            onReconnect();
+          }
         } catch (err) {
           console.error('Error sending subscription message:', err);
         }
