@@ -53,7 +53,23 @@
     "deploy:production:logs": "./deploy-production.sh logs",
     "deploy:production:stop": "./deploy-production.sh stop",
     "deploy:production:restart": "./deploy-production.sh restart",
-    "deploy:production:health": "./deploy-production.sh health"
+    "deploy:production:health": "./deploy-production.sh health",
+    "deploy:dev": "./deploy.sh dev start",
+    "deploy:dev:mock": "./deploy-development.sh mock",
+    "deploy:dev:monitoring": "./deploy-development.sh monitoring",
+    "deploy:dev:status": "./deploy.sh dev status",
+    "deploy:dev:logs": "./deploy.sh dev logs",
+    "deploy:dev:stop": "./deploy.sh dev stop",
+    "deploy:dev:restart": "./deploy.sh dev restart",
+    "deploy:dev:health": "./deploy.sh dev health",
+    "deploy:dev:cleanup": "./deploy.sh dev cleanup",
+    "deploy:prod": "./deploy.sh prod deploy",
+    "deploy:prod:status": "./deploy.sh prod status",
+    "deploy:prod:logs": "./deploy.sh prod logs",
+    "deploy:prod:stop": "./deploy.sh prod stop",
+    "deploy:prod:restart": "./deploy.sh prod restart",
+    "deploy:prod:health": "./deploy.sh prod health",
+    "deploy:prod:cleanup": "./deploy.sh prod cleanup"
   },
   "eslintConfig": {
     "extends": [
