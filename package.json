@@ -47,7 +47,13 @@
     "docker:logs": "docker compose logs -f",
     "deploy:home": "./deploy.sh home start",
     "deploy:cloud": "./deploy.sh cloud start",
-    "deploy:stop": "./deploy.sh home stop"
+    "deploy:stop": "./deploy.sh home stop",
+    "deploy:production": "./deploy-production.sh deploy",
+    "deploy:production:status": "./deploy-production.sh status",
+    "deploy:production:logs": "./deploy-production.sh logs",
+    "deploy:production:stop": "./deploy-production.sh stop",
+    "deploy:production:restart": "./deploy-production.sh restart",
+    "deploy:production:health": "./deploy-production.sh health"
   },
   "eslintConfig": {
     "extends": [
