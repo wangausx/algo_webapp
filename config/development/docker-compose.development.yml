@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  # Frontend React application for development
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_DOCKER=true
+      - REACT_APP_API_URL_AUTO=true
+      - REACT_APP_API_URL_LOCALHOST=http://localhost:3003
+      - REACT_APP_API_URL_HOME=http://192.168.1.143:3003
+      - REACT_APP_API_URL_EXTERNAL=http://107.137.66.174:3003
+      - REACT_APP_API_URL_DDNS=http://autotrade.mywire.org:3003
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
+      - WDS_SOCKET_HOST=192.168.1.143
+      - WDS_SOCKET_PORT=3000
+      - WDS_SOCKET_PATH=/ws
+      - WDS_SOCKET_PROTOCOL=ws
+      - HOST=0.0.0.0
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+      - FAST_REFRESH=true
+      - GENERATE_SOURCEMAP=true
+      - INLINE_RUNTIME_CHUNK=true
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./node_modules:/app/node_modules
+    networks:
+      - trading-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Mock backend service for development (optional)
+  mock-backend:
+    image: nginx:alpine
+    ports:
+      - "3003:80"
+    volumes:
+      - ./mock-api:/usr/share/nginx/html
+      - ./nginx.mock.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - trading-network
+    restart: unless-stopped
+    profiles:
+      - mock-backend
+
+  # Development monitoring (optional)
+  prometheus-dev:
+    image: prom/prometheus:latest
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.development.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_dev_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=24h'
+      - '--web.enable-lifecycle'
+    networks:
+      - trading-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Development Grafana (optional)
+  grafana-dev:
+    image: grafana/grafana:latest
+    ports:
+      - "3004:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_dev_data:/var/lib/grafana
+    networks:
+      - trading-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+networks:
+  trading-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  prometheus_dev_data:
+    driver: local
+  grafana_dev_data:
+    driver: local

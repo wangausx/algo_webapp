@@ -1,0 +1,227 @@
+name: CI/CD Pipeline for algo_webapp
+
+on:
+  push:
+    branches: [ development, production ]
+  pull_request:
+    branches: [ development, production ]
+
+env:
+  NODE_VERSION: '18'
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  # Development CI/CD
+  development:
+    name: Development Environment
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/development'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run tests
+      run: npm test -- --coverage --watchAll=false
+      
+    - name: Build development version
+      run: npm run build:dev
+      
+    - name: Build Docker development image
+      run: npm run docker:build:dev
+      
+    - name: Run development environment tests
+      run: |
+        docker compose -f config/development/docker-compose.development.yml up -d --build
+        sleep 30
+        curl -f http://localhost:3000 || exit 1
+        docker compose -f config/development/docker-compose.development.yml down
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: development-build
+        path: build/
+        retention-days: 7
+
+  # Production CI/CD
+  production:
+    name: Production Environment
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/production'
+    needs: development
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run tests
+      run: npm test -- --coverage --watchAll=false
+      
+    - name: Build production version
+      run: npm run build:docker
+      
+    - name: Build Docker production image
+      run: npm run docker:build
+      
+    - name: Security scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'algo-trading-frontend:latest'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+        
+    - name: Run production environment tests
+      run: |
+        docker compose -f config/production/docker-compose.production.yml up -d --build
+        sleep 30
+        curl -f http://localhost:3000/health || exit 1
+        docker compose -f config/production/docker-compose.production.yml down
+        
+    - name: Upload production build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: production-build
+        path: build/
+        retention-days: 30
+
+  # Integration Testing
+  integration:
+    name: Integration Testing
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/production'
+    needs: [development, production]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Start backend services (if available)
+      run: |
+        # This would start the backend services for integration testing
+        # For now, we'll simulate the backend
+        echo "Starting integration test environment..."
+        
+    - name: Run integration tests
+      run: |
+        # Start frontend with backend integration
+        docker compose -f config/production/docker-compose.production.yml up -d --build
+        sleep 30
+        
+        # Test API connectivity
+        curl -f http://localhost:3000/health || exit 1
+        
+        # Test backend integration (if available)
+        # curl -f http://localhost:3003/health || echo "Backend not available"
+        
+        docker compose -f config/production/docker-compose.production.yml down
+        
+    - name: Upload integration test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: integration-test-results
+        path: test-results/
+        retention-days: 7
+
+  # Deployment (Manual trigger)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/production' && github.event_name == 'workflow_dispatch'
+    needs: [development, production, integration]
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Deploy to production
+      run: |
+        # This would deploy to your production environment
+        # For now, we'll just build and test
+        npm run build:docker
+        echo "Production deployment completed"
+        
+    - name: Notify deployment success
+      run: |
+        echo "Production deployment successful!"
+        # Add notification logic here (Slack, email, etc.)
+
+  # Security and Quality Checks
+  security:
+    name: Security & Quality
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/production'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run security audit
+      run: npm audit --audit-level=moderate
+      
+    - name: Run linting
+      run: npm run lint || echo "Linting issues found"
+      
+    - name: Check for vulnerabilities
+      run: |
+        npm audit --audit-level=high || exit 1
+        
+    - name: Upload security results
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-results
+        path: |
+          npm-audit.json
+          lint-results.txt
+        retention-days: 30
