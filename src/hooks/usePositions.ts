@@ -12,6 +12,10 @@ export const usePositions = (
   
   // Track recently deleted positions to prevent them from being restored by periodic refreshes
   const recentlyDeletedRef = useRef<Set<string>>(new Set());
+  
+  // Global cooldown mechanism for closed positions fetching
+  const lastClosedPositionsFetchRef = useRef<number>(0);
+  const CLOSED_POSITIONS_FETCH_COOLDOWN = 5000; // 5 seconds minimum between fetches
 
   // Debug: Monitor closedPositions state changes
   useEffect(() => {
@@ -81,6 +85,10 @@ export const usePositions = (
       recentlyDeletedRef.current.clear();
       console.log('Cleared recently deleted positions set due to username change');
       fetchInitialPositions();
+      
+      // Also fetch closed positions initially, but reset the cooldown timer
+      lastClosedPositionsFetchRef.current = 0; // Reset cooldown for initial fetch
+      // fetchClosedPositions will be called after it's declared
     }
   }, [username, fetchInitialPositions]);
 
@@ -94,7 +102,7 @@ export const usePositions = (
     setPositions(positions);
   }, [positions]);
 
-  const fetchClosedPositions = useCallback(async () => {
+  const fetchClosedPositionsInternal = useCallback(async () => {
     if (!username || username.length < 6) return;
     
     console.log(`[${new Date().toISOString()}] fetchClosedPositions called`);
@@ -159,6 +167,27 @@ export const usePositions = (
       setClosedPositions([]);
     }
   }, [username]);
+
+  // Wrapper function with cooldown mechanism
+  const fetchClosedPositions = useCallback(async () => {
+    const now = Date.now();
+    const timeSinceLastFetch = now - lastClosedPositionsFetchRef.current;
+    
+    if (timeSinceLastFetch < CLOSED_POSITIONS_FETCH_COOLDOWN) {
+      console.log(`Skipping closed positions fetch - only ${timeSinceLastFetch}ms since last fetch (cooldown: ${CLOSED_POSITIONS_FETCH_COOLDOWN}ms)`);
+      return;
+    }
+    
+    lastClosedPositionsFetchRef.current = now;
+    await fetchClosedPositionsInternal();
+  }, [fetchClosedPositionsInternal]);
+
+  // Initial fetch of closed positions when username changes
+  useEffect(() => {
+    if (username && username.length >= 6 && lastClosedPositionsFetchRef.current === 0) {
+      fetchClosedPositions();
+    }
+  }, [username, fetchClosedPositions]);
 
   // Remove duplicate username effect - consolidated refresh mechanism handles this
   // useEffect(() => {
@@ -251,8 +280,11 @@ export const usePositions = (
     
     // Automatically fetch updated closed positions from backend
     // This ensures the closed positions data reflects the newly closed position
+    // Use a small delay to allow the backend to process the deletion
     console.log('Triggering automatic fetch of closed positions after position deletion');
-    fetchClosedPositions();
+    setTimeout(() => {
+      fetchClosedPositions();
+    }, 1000); // 1 second delay to ensure backend has processed the deletion
   }, [fetchClosedPositions]);
 
   // Handle manual position cancellation (user clicks close button)
@@ -289,8 +321,11 @@ export const usePositions = (
       }, 120000); // 2 minutes
       
       // Refresh closed positions after successful cancellation
+      // Use a small delay to ensure backend has processed the cancellation
       console.log('Triggering fetch of closed positions after manual position cancellation');
-      await fetchClosedPositions();
+      setTimeout(() => {
+        fetchClosedPositions();
+      }, 1500); // 1.5 second delay to ensure backend has processed the cancellation
     } catch (error) {
       console.error('Error closing position:', error);
       throw error;
@@ -341,7 +376,7 @@ export const usePositions = (
     return () => clearInterval(interval);
   }, [username]);
 
-  // Consolidated refresh mechanism with debouncing
+  // Consolidated refresh mechanism with improved debouncing
   useEffect(() => {
     if (!username) return;
 
@@ -357,11 +392,11 @@ export const usePositions = (
         
         isRefreshing = true;
         try {
-          await fetchClosedPositions();
+          await fetchClosedPositions(); // This now includes the cooldown logic
         } finally {
           isRefreshing = false;
         }
-      }, 1000); // 1 second debounce
+      }, 2000); // 2 second debounce
     };
 
     const isTradingHours = () => {
