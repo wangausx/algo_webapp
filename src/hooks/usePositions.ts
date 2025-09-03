@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { OpenPosition, ClosedPosition } from '../components/Dashboard';
 import { buildApiUrl } from '../config/api';
 import { convertBackendTimeToLocal, logTimeConversion } from '../lib/utils';
@@ -9,6 +9,9 @@ export const usePositions = (
 ) => {
   const [positions, setPositions] = useState<OpenPosition[]>([]);
   const [closedPositions, setClosedPositions] = useState<ClosedPosition[]>([]);
+  
+  // Track recently deleted positions to prevent them from being restored by periodic refreshes
+  const recentlyDeletedRef = useRef<Set<string>>(new Set());
 
   // Debug: Monitor closedPositions state changes
   useEffect(() => {
@@ -47,10 +50,19 @@ export const usePositions = (
           return mappedPosition;
         }).filter((position: OpenPosition | null): position is OpenPosition => position !== null);
         
-        console.log('Final positions array:', positionArray);
-        console.log('Setting positions state with:', positionArray);
-        setPositions(positionArray);
-        return positionArray;
+        // Filter out recently deleted positions to prevent them from being restored
+        const filteredPositions = positionArray.filter((position: OpenPosition) => {
+          const isRecentlyDeleted = recentlyDeletedRef.current.has(position.symbol);
+          if (isRecentlyDeleted) {
+            console.log(`Filtering out recently deleted position: ${position.symbol} from initial fetch`);
+          }
+          return !isRecentlyDeleted;
+        });
+        
+        console.log('Final positions array:', filteredPositions);
+        console.log('Setting positions state with:', filteredPositions);
+        setPositions(filteredPositions);
+        return filteredPositions;
       } else {
         console.log('No open positions found for user:', username);
         setPositions([]);
@@ -65,6 +77,9 @@ export const usePositions = (
   // Fetch initial positions when username changes - only for valid usernames (>= 6 characters)
   useEffect(() => {
     if (username && username.length >= 6) {
+      // Clear recently deleted positions when username changes
+      recentlyDeletedRef.current.clear();
+      console.log('Cleared recently deleted positions set due to username change');
       fetchInitialPositions();
     }
   }, [username, fetchInitialPositions]);
@@ -217,6 +232,17 @@ export const usePositions = (
   // This ensures data consistency and that closed positions are always up to date
   const handlePositionDeletion = useCallback((symbol: string) => {
     console.log('Position deletion received for symbol:', symbol);
+    
+    // Track this deletion to prevent it from being restored by periodic refreshes
+    recentlyDeletedRef.current.add(symbol);
+    console.log('Added to recently deleted set:', symbol, 'Current set:', Array.from(recentlyDeletedRef.current));
+    
+    // Clear the deletion tracking after 2 minutes to allow for legitimate position re-openings
+    setTimeout(() => {
+      recentlyDeletedRef.current.delete(symbol);
+      console.log('Removed from recently deleted set:', symbol, 'Current set:', Array.from(recentlyDeletedRef.current));
+    }, 120000); // 2 minutes
+    
     setPositions((prev) => {
       const updated = prev.filter((p) => p.symbol !== symbol);
       console.log('Updated open positions after deletion:', updated);
@@ -252,6 +278,16 @@ export const usePositions = (
 
       console.log(`Position close request sent for ${symbol} (${side})`);
       
+      // Track this deletion to prevent it from being restored by periodic refreshes
+      recentlyDeletedRef.current.add(symbol);
+      console.log('Added to recently deleted set (manual cancellation):', symbol, 'Current set:', Array.from(recentlyDeletedRef.current));
+      
+      // Clear the deletion tracking after 2 minutes to allow for legitimate position re-openings
+      setTimeout(() => {
+        recentlyDeletedRef.current.delete(symbol);
+        console.log('Removed from recently deleted set (manual cancellation):', symbol, 'Current set:', Array.from(recentlyDeletedRef.current));
+      }, 120000); // 2 minutes
+      
       // Refresh closed positions after successful cancellation
       console.log('Triggering fetch of closed positions after manual position cancellation');
       await fetchClosedPositions();
@@ -282,8 +318,17 @@ export const usePositions = (
             unrealizedPl: entry.unrealizedPl != null ? Number(entry.unrealizedPl) : 0,
           } as OpenPosition));
           
-          setPositions(positionArray);
-          console.log('Open positions refresh: Updated from backend');
+          // Filter out recently deleted positions to prevent them from being restored
+          const filteredPositions = positionArray.filter((position: OpenPosition) => {
+            const isRecentlyDeleted = recentlyDeletedRef.current.has(position.symbol);
+            if (isRecentlyDeleted) {
+              console.log(`Filtering out recently deleted position: ${position.symbol} from periodic refresh`);
+            }
+            return !isRecentlyDeleted;
+          });
+          
+          setPositions(filteredPositions);
+          console.log('Open positions refresh: Updated from backend, filtered positions:', filteredPositions.length, 'of', positionArray.length);
         }
       } catch (error) {
         console.warn('Open positions refresh failed:', error);

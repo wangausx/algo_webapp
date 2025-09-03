@@ -394,7 +394,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
           >
             <div className="flex items-center gap-2">
               <span className={`text-xl transition-transform duration-200 ${showClosedPositions ? 'rotate-90' : ''}`}>›</span>
-              <span className="font-medium">Closed Positions for Today</span>
+              <span className="font-medium">Recent Closed-positions</span>
             </div>
             <span className="text-sm text-gray-500">
               {closedPositions.length} position{closedPositions.length !== 1 ? 's' : ''}
