@@ -124,7 +124,7 @@ export const useOrders = (username: string) => {
 
     const handleFocus = () => {
       if (username) {
-        console.log('Window focused, refreshing orders data');
+        //console.log('Window focused, refreshing orders data');
         fetchOrders();
       }
     };

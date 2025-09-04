@@ -69,7 +69,7 @@ export const useAccount = (username: string) => {
 
     const handleFocus = () => {
       if (username && username.length >= 6) {
-        console.log('Window focused, refreshing account data');
+        //console.log('Window focused, refreshing account data');
         refreshAccountData();
       }
     };

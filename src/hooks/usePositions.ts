@@ -198,7 +198,7 @@ export const usePositions = (
 
   const handlePositionUpdate = useCallback((positionUpdate: OpenPosition) => {
     //console.log('handlePositionUpdate callback created');
-    console.log('Dashboard received position update:', positionUpdate);
+    //console.log('Dashboard received position update:', positionUpdate);
     
     setPositions((prev) => {
       //console.log('Previous positions state:', prev);

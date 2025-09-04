@@ -129,16 +129,16 @@ const AlgoTradingApp: React.FC = () => {
   ) ? accountConfig.username : '';
   
   // Debug logging for username validation
-  console.log('Username validation state:', {
-    username: accountConfig.username,
-    usernameLength: accountConfig.username?.length,
-    isValid: usernameValidation.isValid,
-    isChecking: usernameValidation.isChecking,
-    exists: usernameValidation.exists,
-    canUseForApi: usernameValidation.canUseForApi,
-    error: usernameValidation.error,
-    validatedUsername
-  });
+  // console.log('Username validation state:', {
+  //   username: accountConfig.username,
+  //   usernameLength: accountConfig.username?.length,
+  //   isValid: usernameValidation.isValid,
+  //   isChecking: usernameValidation.isChecking,
+  //   exists: usernameValidation.exists,
+  //   canUseForApi: usernameValidation.canUseForApi,
+  //   error: usernameValidation.error,
+  //   validatedUsername
+  // });
 
   const { tradingStatus, toggleTrading } = useTrading(validatedUsername);
 
