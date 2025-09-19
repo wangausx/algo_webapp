@@ -14,7 +14,20 @@ const isLocalhost = window.location.hostname === 'localhost' || window.location.
 
 // Configuration based on environment
 const getApiConfig = (): ApiConfig => {
-  // Docker deployment (containerized environment) - PRIORITY 1
+  // PRIORITY 1: Fly.io or other cloud deployments (check first)
+  const isFlyIo = window.location.hostname.includes('.fly.dev');
+  const isCloudDeployment = window.location.protocol === 'https:' || isFlyIo;
+  
+  if (isCloudDeployment) {
+    console.log('Cloud deployment detected (Fly.io or HTTPS) - using reverse proxy routing');
+    console.log('hostname:', window.location.hostname, 'protocol:', window.location.protocol);
+    return {
+      baseUrl: `${window.location.protocol}//${window.location.host}`,  // Use same protocol/host
+      wsUrl: `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}` // WebSocket through proxy
+    };
+  }
+  
+  // Docker deployment (containerized environment) - PRIORITY 2
   if (isDocker) {
     console.log('Using Docker API config (Docker environment detected)');
     console.log('isDocker:', isDocker, 'window.location.host:', window.location.host);
@@ -53,8 +66,7 @@ const getApiConfig = (): ApiConfig => {
       };
     } else {
       console.log('External access detected - using external IP for API calls');
-      // When accessed from external IP (like 107.137.66.174), use the same hostname
-      // but with the backend port (3003)
+      // Legacy external IP with direct port access
       const externalHost = window.location.hostname;
       return {
         baseUrl: `http://${externalHost}:3003`,  // Backend exposed on external IP:3003
@@ -147,7 +159,15 @@ if (process.env.NODE_ENV === 'development') {
 // Helper function to build API URLs
 export const buildApiUrl = (endpoint: string): string => {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  return `${apiConfig.baseUrl}${cleanEndpoint}`;
+  
+  // Add /api prefix only for cloud deployments (Fly.io) that use nginx reverse proxy
+  // Home environment (localhost:3003) doesn't need /api prefix
+  const isFlyIo = window.location.hostname.includes('.fly.dev');
+  const isCloudDeployment = window.location.protocol === 'https:' || isFlyIo;
+  const needsApiPrefix = isCloudDeployment && !cleanEndpoint.startsWith('/api/');
+  
+  const apiEndpoint = needsApiPrefix ? `/api${cleanEndpoint}` : cleanEndpoint;
+  return `${apiConfig.baseUrl}${apiEndpoint}`;
 };
 
 // Helper function to build WebSocket URL

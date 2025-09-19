@@ -15,7 +15,7 @@ export const usePositions = (
   
   // Global cooldown mechanism for closed positions fetching
   const lastClosedPositionsFetchRef = useRef<number>(0);
-  const CLOSED_POSITIONS_FETCH_COOLDOWN = 5000; // 5 seconds minimum between fetches
+  const CLOSED_POSITIONS_FETCH_COOLDOWN = 2000; // 2 seconds minimum between fetches
 
   // Debug: Monitor closedPositions state changes
   useEffect(() => {
