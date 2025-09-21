@@ -24,7 +24,7 @@ const getApiConfig = (): ApiConfig => {
     console.log('hostname:', window.location.hostname, 'protocol:', window.location.protocol);
     return {
       baseUrl: `${window.location.protocol}//${window.location.host}`,  // Use same protocol/host
-      wsUrl: `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}` // WebSocket through proxy
+      wsUrl: `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws` // WebSocket through /ws proxy
     };
   }
 
