@@ -16,8 +16,9 @@ const isLocalhost = window.location.hostname === 'localhost' || window.location.
 const getApiConfig = (): ApiConfig => {
   // PRIORITY 1: Fly.io or other cloud deployments (check first)
   const isFlyIo = window.location.hostname.includes('.fly.dev');
-  const isCloudDeployment = window.location.protocol === 'https:' || isFlyIo;
-  
+  const isCustomDomain = window.location.hostname === 'autotrade.mywire.org';
+  const isCloudDeployment = window.location.protocol === 'https:' || isFlyIo || isCustomDomain;
+
   if (isCloudDeployment) {
     console.log('Cloud deployment detected (Fly.io or HTTPS) - using reverse proxy routing');
     console.log('hostname:', window.location.hostname, 'protocol:', window.location.protocol);
@@ -26,19 +27,19 @@ const getApiConfig = (): ApiConfig => {
       wsUrl: `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}` // WebSocket through proxy
     };
   }
-  
+
   // Docker deployment (containerized environment) - PRIORITY 2
   if (isDocker) {
     console.log('Using Docker API config (Docker environment detected)');
     console.log('isDocker:', isDocker, 'window.location.host:', window.location.host);
-    
+
     // Check if we're accessing from outside the Docker network (browser)
     // vs inside the Docker network (container-to-container)
-    const isLocalhost = window.location.hostname === 'localhost' || 
-                       window.location.hostname === '127.0.0.1';
-    
+    const isLocalhost = window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+
     const isInternalIP = window.location.hostname.includes('192.168.1.143');
-    
+
     // PRIORITY: Localhost access should always use localhost:3003 for both API and WebSocket
     if (isLocalhost) {
       console.log('Localhost access detected - using environment variable for API calls (browser access)');
@@ -74,20 +75,20 @@ const getApiConfig = (): ApiConfig => {
       };
     }
   }
-  
+
   // Check if we have a custom API URL from environment - PRIORITY 2
   const customApiUrl = process.env.REACT_APP_API_URL;
-  
+
   if (customApiUrl) {
     console.log('Using custom API URL:', customApiUrl);
-    
+
     // Extract host and port from the API URL for WebSocket
     const apiUrl = new URL(customApiUrl);
-    
+
     // For external access, use the API URL host for both API and WebSocket
     // This ensures consistent routing through the same network path
     const isExternalAccess = !window.location.hostname.includes('192.168.1.143') && !window.location.hostname.includes('localhost');
-    
+
     if (isExternalAccess) {
       console.log('External access detected - using internal IP for API due to NAT hairpinning limitations');
       console.log('API URL host:', apiUrl.hostname, 'Current location:', window.location.hostname);
@@ -98,13 +99,13 @@ const getApiConfig = (): ApiConfig => {
         wsUrl: `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${apiUrl.hostname}:3003`
       };
     }
-    
+
     return {
       baseUrl: customApiUrl,
       wsUrl: `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${apiUrl.hostname}:${apiUrl.port || '3003'}`
     };
   }
-  
+
   // Local development (localhost) - PRIORITY 3
   if (isDevelopment || isLocalhost) {
     console.log('Using localhost API config (local development)');
@@ -113,7 +114,7 @@ const getApiConfig = (): ApiConfig => {
       wsUrl: `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://localhost:3001`
     };
   }
-  
+
   // Production build (non-containerized) - PRIORITY 4
   if (isProduction) {
     console.log('Using production API config');
@@ -125,7 +126,7 @@ const getApiConfig = (): ApiConfig => {
       wsUrl: `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${wsHost}:${wsPort}`
     };
   }
-  
+
   // Fallback for any other case - PRIORITY 5
   console.log('Using fallback API config');
   return {
@@ -159,13 +160,14 @@ if (process.env.NODE_ENV === 'development') {
 // Helper function to build API URLs
 export const buildApiUrl = (endpoint: string): string => {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  
+
   // Add /api prefix only for cloud deployments (Fly.io) that use nginx reverse proxy
   // Home environment (localhost:3003) doesn't need /api prefix
   const isFlyIo = window.location.hostname.includes('.fly.dev');
-  const isCloudDeployment = window.location.protocol === 'https:' || isFlyIo;
+  const isCustomDomain = window.location.hostname === 'autotrade.mywire.org';
+  const isCloudDeployment = window.location.protocol === 'https:' || isFlyIo || isCustomDomain;
   const needsApiPrefix = isCloudDeployment && !cleanEndpoint.startsWith('/api/');
-  
+
   const apiEndpoint = needsApiPrefix ? `/api${cleanEndpoint}` : cleanEndpoint;
   return `${apiConfig.baseUrl}${apiEndpoint}`;
 };
