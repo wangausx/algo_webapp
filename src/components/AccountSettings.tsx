@@ -10,6 +10,8 @@ import { useAccountSettings } from '../hooks/useAccountSettings';
 import DemoAccountRestrictionPopup from './DemoAccountRestrictionPopup';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
 import { clearUserData, clearStoredData } from '../utils/storage';
+import { useAuth } from '../contexts/AuthContext';
+import InlineAuthentication from './InlineAuthentication';
 
 export interface AccountConfig {
   username: string;
@@ -43,8 +45,11 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
    * 4. Personal account: Can query existing data, create new accounts, or update existing ones
    */
   const [showRestrictionPopup, setShowRestrictionPopup] = React.useState(false);
+  const [showAuthForm, setShowAuthForm] = React.useState(false);
+  const [authFormInstance, setAuthFormInstance] = React.useState(0);
   const demoDataLoadedRef = React.useRef(false);
   const personalDataLoadedRef = React.useRef(false);
+  const { user, logout } = useAuth();
   
   const {
     accountConfig: currentAccountConfig,
@@ -54,7 +59,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
     loadDemoAccountData,
     loadAccountSettings,
     usernameValidation
-  } = useAccountSettings(accountConfig.username);
+  } = useAccountSettings(accountConfig.username, user?.isAuthenticated);
 
   // Load demo account data when demo account is selected
   React.useEffect(() => {
@@ -108,14 +113,39 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
     if (isSelected) {
       // Switching to demo account
       setIsDemoAccountSelected(true);
+      setShowAuthForm(false); // Hide auth form
     } else {
       // Switching to personal account
-      if (window.confirm('Switch to personal account? This will clear demo account data and allow you to enter your own credentials.')) {
-        // Clear all demo account data
-        clearStoredData();
+      if (user?.username) {
+        // User is already authenticated
+        setIsDemoAccountSelected(false);
+        setShowAuthForm(false);
+        
+        // Update account config with authenticated user data
+        const personalConfig: AccountConfig = {
+          username: user.username,
+          apiKey: '',
+          secretKey: '',
+          brokerageType: 'paper' as const,
+          modelType: 'intraday_reversal' as const,
+          riskLevel: 'moderate' as const,
+          balance: 0,
+          demoAccount: false
+        };
+        
+        setCurrentAccountConfig(personalConfig);
+        setAccountConfig(personalConfig);
+        
+        // Reset demo data loaded flag
+        demoDataLoadedRef.current = false;
+        personalDataLoadedRef.current = false;
+      } else {
+        // User not authenticated - show authentication form
+        setShowAuthForm(true);
+        setAuthFormInstance(prev => prev + 1); // force fresh mount with empty fields
         setIsDemoAccountSelected(false);
         
-        // Update both parent and local state
+        // Update both parent and local state with empty config
         const emptyPersonalConfig: AccountConfig = {
           username: '',
           apiKey: '',
@@ -145,28 +175,38 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       return;
     }
 
-    if (window.confirm('Are you sure you want to reset your personal account data? This will clear your username and preferences, but you can still switch back to demo accounts.')) {
+    if (window.confirm('Are you sure you want to reset your personal account data? This will log you out and switch to demo account.')) {
+      // Clear local storage data
       clearUserData();
-      setIsDemoAccountSelected(false);
       
-      // Update both parent and local state
-      const emptyPersonalConfig: AccountConfig = {
-        username: '',
+      // Log out the user to clear authentication state
+      if (user?.username) {
+        console.log('Logging out user due to reset');
+        logout();
+      }
+      
+      // Switch to demo account
+      setIsDemoAccountSelected(true);
+      
+      // Set demo account config
+      const demoConfig: AccountConfig = {
+        username: 'wangausx',
         apiKey: '',
         secretKey: '',
         brokerageType: 'paper' as const,
         modelType: 'intraday_reversal' as const,
         riskLevel: 'moderate' as const,
         balance: 0,
-        demoAccount: false
+        demoAccount: true
       };
       
-      setCurrentAccountConfig(emptyPersonalConfig);
-      setAccountConfig(emptyPersonalConfig);
+      setCurrentAccountConfig(demoConfig);
+      setAccountConfig(demoConfig);
       
-      // Reset demo data loaded flag
+      // Reset flags
       demoDataLoadedRef.current = false;
       personalDataLoadedRef.current = false;
+      setShowAuthForm(false);
     }
   };
 
@@ -219,6 +259,44 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
     setAccountConfig(updatedConfig);
   };
 
+  // Handle successful authentication
+  const handleAuthSuccess = () => {
+    setShowAuthForm(false);
+    // The user authentication effect will handle loading account data
+    // No need to manually trigger here as the effect will run when user state updates
+  };
+
+  // Effect to handle when user becomes authenticated
+  React.useEffect(() => {
+    if (user?.username && !isDemoAccountSelected) {
+      // User is authenticated and using personal account
+      setShowAuthForm(false);
+      
+      // Only update if the username doesn't match (to avoid overwriting API credentials)
+      if (currentAccountConfig.username !== user.username) {
+        console.log('Setting authenticated user username:', user.username);
+        
+        // Update account config with authenticated user data, preserving existing data
+        const personalConfig: AccountConfig = {
+          ...currentAccountConfig, // Preserve existing API credentials and settings
+          username: user.username,
+          demoAccount: false
+        };
+        
+        setCurrentAccountConfig(personalConfig);
+        setAccountConfig(personalConfig);
+        
+        // Reset flags when user changes
+        demoDataLoadedRef.current = false;
+        personalDataLoadedRef.current = false;
+        
+        // Automatically load existing account data for the authenticated user
+        console.log('User authenticated, loading existing account data for:', user.username);
+        loadAccountSettings();
+      }
+    }
+  }, [user, isDemoAccountSelected, setAccountConfig, currentAccountConfig, loadAccountSettings]);
+
   if (isLoading) {
     return (
       <Card>
@@ -251,7 +329,12 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
           )}
         </CardHeader>
         <CardContent className="p-3 md:p-4">
-          <form className="space-y-3 md:space-y-4 grid md:grid-cols-2 gap-4" onSubmit={handleSubmit}>
+          {showAuthForm ? (
+            <div className="space-y-4">
+              <InlineAuthentication key={authFormInstance} instanceKey={authFormInstance} onAuthSuccess={handleAuthSuccess} />
+            </div>
+          ) : (
+            <form className="space-y-3 md:space-y-4 grid md:grid-cols-2 gap-4" onSubmit={handleSubmit}>
             {/* Demo Account Selection */}
             <div className="md:col-span-2 space-y-2">
               <label className="text-xs md:text-sm font-medium">Account Type</label>
@@ -264,7 +347,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                     onChange={() => handleDemoAccountSelectionChange(false)}
                     className="w-4 h-4 text-blue-600"
                   />
-                  <span className="text-sm">Personal Account</span>
+                  <span className="text-sm">Personal Account {user?.username ? `(${user.username})` : '(Sign In Required)'}</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -286,7 +369,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                 value={currentAccountConfig.username}
                 onChange={(e) => handleInputChange('username', e.target.value)}
                 className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                  currentAccountConfig.demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                  currentAccountConfig.demoAccount || !isDemoAccountSelected ? 'bg-gray-100 cursor-not-allowed' : ''
                 } ${
                   !isDemoAccountSelected && currentAccountConfig.username && usernameValidation.isValid
                     ? usernameValidation.exists 
@@ -296,27 +379,22 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                       ? 'border-red-500 bg-red-50'
                       : ''
                 }`}
-                disabled={currentAccountConfig.demoAccount}
-                placeholder={isDemoAccountSelected ? 'wangausx (Demo Account)' : 'Enter your username'}
+                disabled={currentAccountConfig.demoAccount || !isDemoAccountSelected}
+                placeholder={isDemoAccountSelected ? 'wangausx (Demo Account)' : user?.username || 'Authenticated User'}
               />
               
               {/* Username validation feedback */}
               {!isDemoAccountSelected && currentAccountConfig.username && (
                 <div className="text-xs">
+                  <p className="text-blue-600">✓ authenticated user</p>
                   {usernameValidation.isChecking && (
-                    <p className="text-blue-600">Checking username availability...</p>
-                  )}
-                  {!usernameValidation.isChecking && usernameValidation.canUseForApi && usernameValidation.exists && (
-                    <p className="text-green-600">✓ Username exists - loading account data</p>
+                    <p className="text-blue-600">Checking account data...</p>
                   )}
                   {!usernameValidation.isChecking && usernameValidation.isValid && !usernameValidation.canUseForApi && (
-                    <p className="text-blue-600">✓ Username available for new account (press Save to create)</p>
+                    <p className="text-blue-600">✓ Ready to configure account (press Save to create)</p>
                   )}
                   {!usernameValidation.isChecking && !usernameValidation.isValid && usernameValidation.error && (
                     <p className="text-red-600">✗ {usernameValidation.error}</p>
-                  )}
-                  {!usernameValidation.isChecking && currentAccountConfig.username.length < 6 && (
-                    <p className="text-gray-500">Enter at least 6 characters to validate username</p>
                   )}
                 </div>
               )}
@@ -420,6 +498,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
               {isDemoAccountSelected ? 'Reset Not Available (Demo Account)' : 'Reset Personal Data'}
             </button>
           </form>
+          )}
         </CardContent>
       </Card>
 

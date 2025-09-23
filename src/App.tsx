@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Menu, Settings as SettingsIcon, TrendingUp, User, Shield } from 'lucide-react';
+import { Menu, Settings as SettingsIcon, TrendingUp, User, Shield, LogOut } from 'lucide-react';
 import AccountSettings, { AccountConfig } from './components/AccountSettings';
 import TradeSettings from './components/TradeSettings';
 import Dashboard from './components/Dashboard'; 
+import AuthenticationFlow from './components/AuthenticationFlow';
 import { useTrading } from './hooks/useTrading';
 import { useWebSocket } from './hooks/useWebSocket';
 import { usePositions } from './hooks/usePositions';
 import { useOrders } from './hooks/useOrders';
 import { useAccount } from './hooks/useAccount';
 import { useAccountSettings } from './hooks/useAccountSettings';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { 
   loadUsername, 
   saveUsername, 
@@ -17,14 +19,16 @@ import {
   saveAccountConfig 
 } from './utils/storage';
 
-const AlgoTradingApp: React.FC = () => {
+// Main authenticated app component
+const AuthenticatedApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isDemoAccountSelected, setIsDemoAccountSelected] = useState(false);
   const [isLoadingSavedData, setIsLoadingSavedData] = useState(true);
+  const { user, logout } = useAuth();
 
   const [accountConfig, setAccountConfig] = useState<AccountConfig>({
-    username: '',
+    username: user?.username || '',
     apiKey: '',
     secretKey: '',
     brokerageType: 'paper',
@@ -34,22 +38,34 @@ const AlgoTradingApp: React.FC = () => {
     demoAccount: false
   });
 
-  // Load saved data from localStorage on startup
+  // Load saved data from localStorage on startup and when user changes
   useEffect(() => {
     const savedUsername = loadUsername();
     const savedDemoSelection = loadDemoAccountSelection();
     
-    if (savedUsername) {
-      setAccountConfig(prev => ({ ...prev, username: savedUsername }));
-    }
-    
-    if (savedDemoSelection) {
-      setIsDemoAccountSelected(savedDemoSelection);
+    if (user?.username) {
+      // Authenticated user - use their username
+      setAccountConfig(prev => ({ ...prev, username: user.username }));
+      setIsDemoAccountSelected(false); // Personal account
+    } else if (savedUsername && savedUsername !== 'wangausx') {
+      // Returning user with saved personal account but no authentication
+      // This means they need to re-authenticate
+      console.log('Found saved personal account without authentication, switching to demo account');
+      setIsDemoAccountSelected(true);
+      setAccountConfig(prev => ({ ...prev, username: 'wangausx', demoAccount: true }));
+    } else if (savedUsername === 'wangausx' || savedDemoSelection) {
+      // Demo account user
+      setIsDemoAccountSelected(true);
+      setAccountConfig(prev => ({ ...prev, username: 'wangausx', demoAccount: true }));
+    } else {
+      // First-time user - default to demo account
+      setIsDemoAccountSelected(true);
+      setAccountConfig(prev => ({ ...prev, username: 'wangausx', demoAccount: true }));
     }
     
     // Mark loading as complete
     setIsLoadingSavedData(false);
-  }, []);
+  }, [user]);
 
   // Update demo account status when selection changes
   useEffect(() => {
@@ -70,6 +86,14 @@ const AlgoTradingApp: React.FC = () => {
       setIsDemoAccountSelected(true);
     }
   }, [accountConfig.username, isDemoAccountSelected, isLoadingSavedData]);
+
+  // Handle authenticated user changes
+  useEffect(() => {
+    if (user?.username && !isDemoAccountSelected) {
+      // Authenticated user - make sure their username is set
+      setAccountConfig(prev => ({ ...prev, username: user.username }));
+    }
+  }, [user, isDemoAccountSelected]);
 
   // Save username to localStorage when it changes
   useEffect(() => {
@@ -97,27 +121,33 @@ const AlgoTradingApp: React.FC = () => {
         demoAccount: true
       }));
     } else {
-      // Switching to personal account - clear demo account data
-      localStorage.removeItem('algoTrading_demoAccountSelected');
-      localStorage.removeItem('algoTrading_username');
-      localStorage.removeItem('algoTrading_accountConfig');
-      
-      // Reset account config to empty personal account
-      setAccountConfig({
-        username: '',
-        apiKey: '',
-        secretKey: '',
-        brokerageType: 'paper',
-        modelType: 'intraday_reversal',
-        riskLevel: 'moderate',
-        balance: 0,
-        demoAccount: false
-      });
+      // Switching to personal account
+      if (user?.username) {
+        // User is already authenticated - use their data
+        setAccountConfig(prev => ({
+          ...prev,
+          username: user.username,
+          demoAccount: false
+        }));
+      } else {
+        // User not authenticated - this will trigger login/signup in AccountSettings
+        setAccountConfig(prev => ({
+          ...prev,
+          username: '',
+          apiKey: '',
+          secretKey: '',
+          brokerageType: 'paper',
+          modelType: 'intraday_reversal',
+          riskLevel: 'moderate',
+          balance: 0,
+          demoAccount: false
+        }));
+      }
     }
   };
 
   // Get username validation from AccountSettings hook
-  const { usernameValidation } = useAccountSettings(accountConfig.username);
+  const { usernameValidation } = useAccountSettings(accountConfig.username, user?.isAuthenticated);
   
   // Only use validated usernames for API calls
   // Additional check to ensure username can be used for API calls (exists in backend)
@@ -214,13 +244,22 @@ const AlgoTradingApp: React.FC = () => {
               ) : accountConfig.username.trim() === '' ? (
                 'Please set up your account or select a demo account'
               ) : (
-                accountConfig.username
+                <span>Welcome, {accountConfig.username}</span>
               )}
             </p>
           </div>
-          <button className="md:hidden p-2" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-            <Menu className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={logout}
+              className="md:hidden p-2 text-gray-600 hover:text-red-600 transition-colors"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+            <button className="md:hidden p-2" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+              <Menu className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         <nav className={`${mobileMenuOpen ? 'block' : 'hidden'} md:block mt-0 md:mt-4`}>
           <button
@@ -250,6 +289,17 @@ const AlgoTradingApp: React.FC = () => {
             <Shield className="w-4 h-4 md:w-5 md:h-5 mr-2" />
             Trade Settings
           </button>
+          
+          {/* Desktop Logout Button */}
+          <div className="hidden md:block mt-auto p-4 border-t">
+            <button
+              onClick={logout}
+              className="flex items-center w-full px-4 py-3 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
+            </button>
+          </div>
         </nav>
       </div>
 
@@ -293,6 +343,21 @@ const AlgoTradingApp: React.FC = () => {
       </div>
     </div>
   );
+};
+
+// Main App component that handles authentication flow
+const AlgoTradingApp: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+};
+
+// Content component that always shows the main app
+const AppContent: React.FC = () => {
+  // Always show the main app - authentication is handled within Account Settings
+  return <AuthenticatedApp />;
 };
 
 export default AlgoTradingApp;

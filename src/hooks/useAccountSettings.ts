@@ -3,7 +3,7 @@ import { AccountConfig } from '../components/AccountSettings';
 import { buildApiUrl } from '../config/api';
 import { loadUsername } from '../utils/storage';
 
-export const useAccountSettings = (username: string) => {
+export const useAccountSettings = (username: string, isAuthenticated?: boolean) => {
   const [accountConfig, setAccountConfig] = useState<AccountConfig>(() => {
     // Initialize with saved username from localStorage if available
     const savedUsername = loadUsername();
@@ -44,6 +44,18 @@ export const useAccountSettings = (username: string) => {
   // Validate username format and check if it exists in backend
   const validateUsername = useCallback(async (usernameToValidate: string) => {
     console.log('validateUsername called with:', usernameToValidate);
+
+    // Short-circuit validation for demo user
+    if (usernameToValidate === 'wangausx') {
+      setUsernameValidation({
+        isValid: true,
+        isChecking: false,
+        exists: true,
+        canUseForApi: true,
+        error: null
+      });
+      return true;
+    }
     
     if (!usernameToValidate || usernameToValidate.length < 6) {
       console.log('Username validation failed - too short:', usernameToValidate);
@@ -73,43 +85,105 @@ export const useAccountSettings = (username: string) => {
 
     try {
       console.log('Checking username existence in backend for:', usernameToValidate);
-      // Check if username exists in backend
-      const response = await fetch(buildApiUrl(`/router/account/${usernameToValidate}`));
-      console.log('Backend validation response:', response.status, response.ok);
       
-      if (response.ok) {
-        // Username exists
-        console.log('Username exists in backend:', usernameToValidate);
-        setUsernameValidation({
-          isValid: true,
-          isChecking: false,
-          exists: true,
-          canUseForApi: true, // Can use for API calls since it exists
-          error: null
-        });
-        return true;
-      } else if (response.status === 404) {
-        // Username doesn't exist yet - this is valid for new accounts but not for existing data
-        console.log('Username available for new account:', usernameToValidate);
-        setUsernameValidation({
-          isValid: true,
-          isChecking: false,
-          exists: false,
-          canUseForApi: false, // Cannot use for API calls until account is created
-          error: null
-        });
-        return true;
+      // First check if username exists using the auth endpoint
+      const authCheckResponse = await fetch(buildApiUrl(`/api/auth/check-username/${usernameToValidate}`));
+      
+      if (authCheckResponse.ok) {
+        const authData = await authCheckResponse.json();
+        console.log('Auth check response:', authData);
+        
+        if (authData.exists && authData.hasPassword) {
+          // User exists and has authentication set up
+          console.log('Username exists with authentication:', usernameToValidate);
+          setUsernameValidation({
+            isValid: true,
+            isChecking: false,
+            exists: true,
+            canUseForApi: true, // Can use for API calls since it exists with auth
+            error: null
+          });
+          return true;
+        } else if (authData.exists && !authData.hasPassword) {
+          // User exists but no password set - this might be a data sync issue
+          // If user is authenticated in the frontend, trust that and allow API calls
+          console.log('Username exists but needs authentication setup:', usernameToValidate);
+          console.log('isAuthenticated parameter:', isAuthenticated);
+          
+          if (isAuthenticated) {
+            // User is authenticated in frontend, allow API calls despite backend mismatch
+            console.log('User is authenticated in frontend, allowing API calls despite backend auth mismatch');
+            setUsernameValidation({
+              isValid: true,
+              isChecking: false,
+              exists: true,
+              canUseForApi: true, // Allow API calls for authenticated users
+              error: null
+            });
+            return true;
+          } else {
+            // User not authenticated, cannot use for API calls
+            setUsernameValidation({
+              isValid: true,
+              isChecking: false,
+              exists: true,
+              canUseForApi: false, // Cannot use for API calls until auth is set up
+              error: null
+            });
+            return true;
+          }
+          
+        } else {
+          // Username doesn't exist yet - available for registration
+          console.log('Username available for new account:', usernameToValidate);
+          setUsernameValidation({
+            isValid: true,
+            isChecking: false,
+            exists: false,
+            canUseForApi: false, // Cannot use for API calls until account is created
+            error: null
+          });
+          return true;
+        }
       } else {
-        // Other error statuses
-        console.log('Backend validation error:', response.status);
-        setUsernameValidation({
-          isValid: false,
-          isChecking: false,
-          exists: false,
-          canUseForApi: false,
-          error: `Error (${response.status}) - missing or invalid API credentials`
-        });
-        return false;
+        // Fallback to old account check method
+        const response = await fetch(buildApiUrl(`/router/account/${usernameToValidate}`));
+        console.log('Fallback account check response:', response.status, response.ok);
+        
+        if (response.ok) {
+          // Username exists in account settings
+          console.log('Username exists in account settings:', usernameToValidate);
+          setUsernameValidation({
+            isValid: true,
+            isChecking: false,
+            exists: true,
+            canUseForApi: true, // Can use for API calls since it exists
+            error: null
+          });
+          return true;
+        } else if (response.status === 404) {
+          // Username doesn't exist
+          console.log('Username available for new account:', usernameToValidate);
+          setUsernameValidation({
+            isValid: true,
+            isChecking: false,
+            exists: false,
+            canUseForApi: false, // Cannot use for API calls until account is created
+            error: null
+          });
+          return true;
+        } else {
+          // Other error statuses
+          console.log('Backend validation error:', response.status);
+          setUsernameValidation({
+            isValid: false,
+            isChecking: false,
+            exists: false,
+            canUseForApi: false,
+            error: `Error (${response.status}) - unable to validate username`
+          });
+          return false;
+        }
       }
     } catch (error) {
       console.error('Error validating username:', error);
@@ -129,10 +203,36 @@ export const useAccountSettings = (username: string) => {
     console.log('Username validation effect triggered:', {
       effectiveUsername,
       usernameLength: effectiveUsername?.length,
-      currentValidation: usernameValidation
+      currentValidation: usernameValidation,
+      isAuthenticated
     });
     
     if (effectiveUsername) {
+      // Bypass validation completely for demo account
+      if (effectiveUsername === 'wangausx') {
+        setUsernameValidation({
+          isValid: true,
+          isChecking: false,
+          exists: true,
+          canUseForApi: true,
+          error: null
+        });
+        return;
+      }
+
+      // If user is authenticated, skip validation and mark as valid for API use
+      if (isAuthenticated) {
+        console.log('User is authenticated, skipping validation for:', effectiveUsername);
+        setUsernameValidation({
+          isValid: true,
+          isChecking: false,
+          exists: true,
+          canUseForApi: true, // Authenticated users can use API
+          error: null
+        });
+        return;
+      }
+      
       // Add a small delay to prevent validation while user is still typing
       const timer = setTimeout(() => {
         console.log('Starting username validation for:', effectiveUsername);
@@ -150,7 +250,7 @@ export const useAccountSettings = (username: string) => {
         error: null
       });
     }
-  }, [effectiveUsername, validateUsername]);
+  }, [effectiveUsername, validateUsername, isAuthenticated]);
 
   // Save account settings - creates new account if it doesn't exist, or updates existing account
   const saveAccountSettings = async (e: React.FormEvent) => {
@@ -272,7 +372,9 @@ export const useAccountSettings = (username: string) => {
   // Query existing account settings data - memoized with useCallback
   // This function only queries existing accounts, it does NOT create new accounts
   const loadAccountSettings = useCallback(async () => {
-    if (!effectiveUsername || !usernameValidation.isValid) return;
+    // For authenticated users, load data even if validation hasn't completed
+    // For non-authenticated users, require valid username and validation
+    if (!effectiveUsername || (!isAuthenticated && !usernameValidation.isValid)) return;
     
     setIsLoading(true);
     try {
@@ -298,7 +400,7 @@ export const useAccountSettings = (username: string) => {
     } finally {
       setIsLoading(false);
     }
-  }, [effectiveUsername, usernameValidation.isValid]);
+  }, [effectiveUsername, usernameValidation.isValid, isAuthenticated]);
 
   return {
     accountConfig,
