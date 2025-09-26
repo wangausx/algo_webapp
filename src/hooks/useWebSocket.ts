@@ -38,6 +38,11 @@ export function useWebSocket(
   const reconnectAttempts = useRef(0);
   const isConnecting = useRef(false);
   const isSubscribed = useRef(false);
+  
+  // Silent connection detection
+  const lastPongReceived = useRef<number>(Date.now());
+  const heartbeatTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const connectionHealthCheckRef = useRef<NodeJS.Timeout | null>(null);
 
   const cleanup = () => {
     if (reconnectTimeoutRef.current) {
@@ -48,6 +53,16 @@ export function useWebSocket(
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
+    }
+    
+    if (heartbeatTimeoutRef.current) {
+      clearTimeout(heartbeatTimeoutRef.current);
+      heartbeatTimeoutRef.current = null;
+    }
+    
+    if (connectionHealthCheckRef.current) {
+      clearInterval(connectionHealthCheckRef.current);
+      connectionHealthCheckRef.current = null;
     }
     
     if (wsRef.current) {
@@ -64,11 +79,35 @@ export function useWebSocket(
     isSubscribed.current = false;
   };
 
+  // Trading hours detection
+  const isTradingHours = () => {
+    const now = new Date();
+    const hour = now.getHours();
+    const day = now.getDay();
+    
+    // Monday to Friday, 9:30 AM to 4:00 PM EST (market hours)
+    return day >= 1 && day <= 5 && hour >= 9 && hour < 16;
+  };
+
   const scheduleReconnect = () => {
-    if (reconnectAttempts.current < 5) {
+    // Increase max attempts during trading hours for better reliability
+    const maxAttempts = isTradingHours() ? 15 : 10;
+    
+    if (reconnectAttempts.current < maxAttempts) {
       reconnectAttempts.current++;
-      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+      
+      // More aggressive reconnection during trading hours
+      const baseDelay = isTradingHours() ? 1000 : 2000;
+      const exponentialDelay = baseDelay * Math.pow(2, reconnectAttempts.current);
+      
+      // Add jitter to prevent thundering herd
+      const jitter = Math.random() * 1000;
+      const delay = Math.min(exponentialDelay + jitter, isTradingHours() ? 15000 : 30000);
+      
+      console.log(`Scheduling reconnection attempt ${reconnectAttempts.current}/${maxAttempts} in ${Math.round(delay)}ms (trading hours: ${isTradingHours()})`);
       reconnectTimeoutRef.current = setTimeout(connect, delay);
+    } else {
+      console.warn(`Max reconnection attempts (${maxAttempts}) reached. Will retry when trading hours change or user action triggers reconnection.`);
     }
   };
 
@@ -127,28 +166,75 @@ export function useWebSocket(
           console.log('User subscribed to WebSocket:', userId);
           isSubscribed.current = true;
           
-          // Trigger reconnection callback to refresh data
-          if (onReconnect && reconnectAttempts.current > 0) {
-            console.log('WebSocket reconnected, triggering data refresh');
+          // Trigger reconnection callback to refresh data on every reconnection
+          if (onReconnect) {
+            console.log('WebSocket connected, triggering data refresh');
             onReconnect();
           }
         } catch (err) {
           console.error('Error sending subscription message:', err);
         }
         
-        // Start heartbeat
+        // Start improved heartbeat with pong validation
         if (heartbeatRef.current) {
           clearInterval(heartbeatRef.current);
         }
+        
+        // Reset pong timestamp
+        lastPongReceived.current = Date.now();
+        
         heartbeatRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
             try {
               ws.send(JSON.stringify({ type: 'ping' }));
+              console.log('Sent ping to WebSocket server');
+              
+              // Set timeout for pong response
+              if (heartbeatTimeoutRef.current) {
+                clearTimeout(heartbeatTimeoutRef.current);
+              }
+              
+              heartbeatTimeoutRef.current = setTimeout(() => {
+                const timeSinceLastPong = Date.now() - lastPongReceived.current;
+                console.warn(`No pong received for ${timeSinceLastPong}ms, connection may be silent`);
+                
+                // If no pong received for 30 seconds, consider connection silent
+                if (timeSinceLastPong > 30000) {
+                  console.error('WebSocket connection appears silent, forcing reconnection');
+                  ws.close(1006, 'Silent connection detected');
+                }
+              }, 15000); // 15 second timeout for pong response
+              
             } catch (err) {
               console.error('Error sending ping:', err);
             }
           }
         }, 10000);
+        
+        // Start connection health monitoring
+        if (connectionHealthCheckRef.current) {
+          clearInterval(connectionHealthCheckRef.current);
+        }
+        
+        connectionHealthCheckRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            const timeSinceLastPong = Date.now() - lastPongReceived.current;
+            const timeSinceLastMessage = Date.now() - lastPongReceived.current;
+            
+            // Check if connection has been silent for too long
+            if (timeSinceLastPong > 60000) { // 1 minute without any response
+              console.warn(`WebSocket connection silent for ${timeSinceLastPong}ms, checking health`);
+              
+              // Send a test message to verify connection
+              try {
+                ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+              } catch (err) {
+                console.error('Failed to send health check ping:', err);
+                ws.close(1006, 'Health check failed');
+              }
+            }
+          }
+        }, 30000); // Check every 30 seconds
       };
 
       ws.onmessage = (event) => {
@@ -204,7 +290,14 @@ export function useWebSocket(
               onWarning?.(message.message);
               break;
             case 'pong':
-              //console.log('Received pong response');
+              console.log('Received pong response');
+              lastPongReceived.current = Date.now();
+              
+              // Clear any pending heartbeat timeout
+              if (heartbeatTimeoutRef.current) {
+                clearTimeout(heartbeatTimeoutRef.current);
+                heartbeatTimeoutRef.current = null;
+              }
               break;
             default:
               console.warn('Unhandled message type:', message.type);
@@ -319,6 +412,28 @@ export function useWebSocket(
       });
     }
   }, [userId, onPositionUpdate, onStockOrder, onPositionDeletion, onWarning]);
+
+  // Monitor trading hours changes to reset reconnection attempts
+  useEffect(() => {
+    const tradingHoursCheck = setInterval(() => {
+      const currentlyTrading = isTradingHours();
+      const wasTrading = reconnectAttempts.current > 0; // Simple heuristic
+      
+      // If trading hours just started and we had failed connections, reset attempts
+      if (currentlyTrading && reconnectAttempts.current >= 5) {
+        console.log('Trading hours started, resetting reconnection attempts');
+        reconnectAttempts.current = 0;
+        
+        // Try to reconnect if not already connected
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+          console.log('Attempting reconnection due to trading hours start');
+          scheduleReconnect();
+        }
+      }
+    }, 60000); // Check every minute
+
+    return () => clearInterval(tradingHoursCheck);
+  }, []);
 
   useEffect(() => {
     if (!userId || userId.length < 6) {
