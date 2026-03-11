@@ -33,6 +33,28 @@ const getApiConfig = (): ApiConfig => {
     console.log('Using Docker API config (Docker environment detected)');
     console.log('isDocker:', isDocker, 'window.location.host:', window.location.host);
 
+    // If REACT_APP_API_URL points to cloud (e.g. Fly), always use that host with /ws for WebSocket
+    const customApiUrl = process.env.REACT_APP_API_URL;
+    const apiUrlIsCloud = customApiUrl && (
+      customApiUrl.includes('.fly.dev') ||
+      customApiUrl.startsWith('https://') ||
+      customApiUrl.includes('autotrade.mywire.org')
+    );
+    if (apiUrlIsCloud && customApiUrl) {
+      try {
+        const url = new URL(customApiUrl);
+        const wsProtocol = url.protocol === 'https:' ? 'wss' : 'ws';
+        const wsHost = url.hostname + (url.port ? `:${url.port}` : '');
+        console.log('Docker build pointing at cloud API - using /ws for WebSocket:', `${wsProtocol}://${wsHost}/ws`);
+        return {
+          baseUrl: customApiUrl,
+          wsUrl: `${wsProtocol}://${wsHost}/ws`
+        };
+      } catch {
+        // fall through to normal Docker logic
+      }
+    }
+
     // Check if we're accessing from outside the Docker network (browser)
     // vs inside the Docker network (container-to-container)
     const isLocalhost = window.location.hostname === 'localhost' ||
@@ -43,14 +65,23 @@ const getApiConfig = (): ApiConfig => {
     // PRIORITY: Localhost access should always use localhost:3003 for both API and WebSocket
     if (isLocalhost) {
       console.log('Localhost access detected - using environment variable for API calls (browser access)');
-      // When accessed from localhost, use the environment variable since backend is exposed on host ports
-      const customApiUrl = process.env.REACT_APP_API_URL;
       if (customApiUrl) {
         console.log('Using REACT_APP_API_URL for localhost access:', customApiUrl);
-        return {
-          baseUrl: customApiUrl,
-          wsUrl: customApiUrl.replace('http://', 'ws://').replace('https://', 'wss://')
-        };
+        try {
+          const url = new URL(customApiUrl);
+          const wsProtocol = url.protocol === 'https:' ? 'wss' : 'ws';
+          const wsHost = url.hostname + (url.port ? `:${url.port}` : '');
+          const wsPath = apiUrlIsCloud ? '/ws' : '';
+          return {
+            baseUrl: customApiUrl,
+            wsUrl: `${wsProtocol}://${wsHost}${wsPath}`
+          };
+        } catch {
+          return {
+            baseUrl: customApiUrl,
+            wsUrl: customApiUrl.replace('http://', 'ws://').replace('https://', 'wss://')
+          };
+        }
       } else {
         console.log('No REACT_APP_API_URL found, falling back to localhost:3003');
         return {

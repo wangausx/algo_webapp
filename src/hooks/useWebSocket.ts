@@ -154,8 +154,8 @@ export function useWebSocket(
       ws.onopen = () => {
         clearTimeout(connectionTimeout);
         isConnecting.current = false;
-        console.log('WebSocket connected successfully');
-        console.log('WebSocket readyState after connection:', ws.readyState);
+        console.log('[WebSocket] Connected successfully');
+        console.log('[WebSocket] readyState after connection:', ws.readyState);
         reconnectAttempts.current = 0;
         
         // Send subscription message immediately upon connection
@@ -163,13 +163,13 @@ export function useWebSocket(
         console.log('Sending subscription message:', subscribeMessage);
         try {
           ws.send(JSON.stringify(subscribeMessage));
-          console.log('User subscribed to WebSocket:', userId);
+            console.log('[WebSocket] User subscribed:', userId);
           isSubscribed.current = true;
           
           // Trigger reconnection callback to refresh data on every reconnection
-          if (onReconnect) {
+          if (onReconnectRef.current) {
             console.log('WebSocket connected, triggering data refresh');
-            onReconnect();
+            onReconnectRef.current();
           }
         } catch (err) {
           console.error('Error sending subscription message:', err);
@@ -187,7 +187,7 @@ export function useWebSocket(
           if (ws.readyState === WebSocket.OPEN) {
             try {
               ws.send(JSON.stringify({ type: 'ping' }));
-              console.log('Sent ping to WebSocket server');
+              // console.log('Sent ping to WebSocket server');
               
               // Set timeout for pong response
               if (heartbeatTimeoutRef.current) {
@@ -254,7 +254,7 @@ export function useWebSocket(
                 // Validate position update data
                 const payload = message.payload;
                 if (payload.symbol && (payload.side === 'long' || payload.side === 'short')) {
-                  onPositionUpdate(message.payload);
+                  onPositionUpdateRef.current(message.payload);
                 } else {
                   console.warn('Invalid position update payload:', payload);
                 }
@@ -264,12 +264,12 @@ export function useWebSocket(
               break;
             case 'order_update':
               console.log('Handling order update:', message.payload);
-              if (onStockOrder && message.payload && typeof message.payload === 'object') {
+              if (onStockOrderRef.current && message.payload && typeof message.payload === 'object') {
                 // Validate order update data
                 const payload = message.payload;
                 if (payload.symbol && (payload.side === 'buy' || payload.side === 'sell')) {
                   console.log('Calling onStockOrder callback with payload:', message.payload);
-                  onStockOrder(message.payload);
+                  onStockOrderRef.current(message.payload);
                 } else {
                   console.warn('Invalid order update payload:', payload);
                 }
@@ -280,17 +280,17 @@ export function useWebSocket(
             case 'position_deletion':
               console.log('Handling position deletion:', message.payload);
               if (message.payload && typeof message.payload === 'object' && message.payload.symbol) {
-                onPositionDeletion?.(message.payload.symbol);
+                onPositionDeletionRef.current?.(message.payload.symbol);
               } else {
                 console.warn('Invalid position deletion payload:', message.payload);
               }
               break;
             case 'warning':
               console.log('Received warning:', message.message);
-              onWarning?.(message.message);
+              onWarningRef.current?.(message.message);
               break;
             case 'pong':
-              console.log('Received pong response');
+              // console.log('Received pong response');
               lastPongReceived.current = Date.now();
               
               // Clear any pending heartbeat timeout
@@ -435,14 +435,27 @@ export function useWebSocket(
     return () => clearInterval(tradingHoursCheck);
   }, []);
 
+  // Keep callback refs up to date so we don't have to depend on them in the effect (avoids reconnect on every render when callbacks change)
+  const onPositionUpdateRef = useRef(onPositionUpdate);
+  const onStockOrderRef = useRef(onStockOrder);
+  const onPositionDeletionRef = useRef(onPositionDeletion);
+  const onWarningRef = useRef(onWarning);
+  const onReconnectRef = useRef(onReconnect);
+  onPositionUpdateRef.current = onPositionUpdate;
+  onStockOrderRef.current = onStockOrder;
+  onPositionDeletionRef.current = onPositionDeletion;
+  onWarningRef.current = onWarning;
+  onReconnectRef.current = onReconnect;
+
   useEffect(() => {
+    console.log('[WebSocket] Effect ran. userId:', userId ? `${userId.length} chars` : 'empty');
     if (!userId || userId.length < 6) {
-      console.log('No userId provided or userId too short (< 6 chars), skipping WebSocket connection');
+      console.warn('[WebSocket] Not connecting: userId missing or too short (< 6 chars). validatedUsername:', userId ? `${userId.slice(0, 2)}...` : 'empty');
       return;
     }
 
     const WS_URL = buildWsUrl();
-    console.log('Attempting WebSocket connection to:', WS_URL);
+    console.log('[WebSocket] Attempting connection to:', WS_URL);
     console.log('Current window.location:', {
       protocol: window.location.protocol,
       host: window.location.host,
@@ -460,7 +473,8 @@ export function useWebSocket(
         reconnectTimeoutRef.current = null;
       }
     };
-  }, [userId, onPositionUpdate, onStockOrder, onPositionDeletion, onWarning]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- depend only on userId so we connect when validation completes and don't disconnect when parent callbacks change
+  }, [userId]);
 
   // Cleanup on unmount
   useEffect(() => {
