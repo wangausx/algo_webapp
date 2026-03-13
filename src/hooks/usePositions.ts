@@ -17,6 +17,10 @@ export const usePositions = (
   const lastClosedPositionsFetchRef = useRef<number>(0);
   const CLOSED_POSITIONS_FETCH_COOLDOWN = 2000; // 2 seconds minimum between fetches
 
+  // Throttle account refresh when triggered by position updates (avoids 30+ /router/account requests/min)
+  const lastAccountRefreshFromPositionRef = useRef<number>(0);
+  const ACCOUNT_REFRESH_COOLDOWN_MS = 20000; // 20s between account refreshes from position updates
+
   // Debug: Monitor closedPositions state changes
   useEffect(() => {
     console.log(`[${new Date().toISOString()}] closedPositions state changed:`, closedPositions.length, 'positions:', closedPositions.map(p => `${p.symbol}-${p.side}`));
@@ -251,9 +255,12 @@ export const usePositions = (
       return [...newPositions];
     });
 
-    // Refresh account data after position update
-    console.log('Calling refreshAccountData after position update');
-    refreshAccountData?.();
+    // Refresh account data after position update (throttled to avoid high request volume)
+    const now = Date.now();
+    if (refreshAccountData && now - lastAccountRefreshFromPositionRef.current >= ACCOUNT_REFRESH_COOLDOWN_MS) {
+      lastAccountRefreshFromPositionRef.current = now;
+      refreshAccountData();
+    }
   }, [refreshAccountData]);
 
   // Handle position deletion from WebSocket notifications
