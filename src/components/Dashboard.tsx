@@ -253,13 +253,13 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
               </span>
               <button
                 onClick={tradingStatus === 'running' ? handleStopTrading : toggleTrading}
-                disabled={demoAccount && !effectiveDemoEditable && tradingStatus === 'running'}
+                disabled={demoAccount && !effectiveDemoEditable}
                 className={`px-3 py-2 md:px-4 md:py-2 text-sm rounded-lg text-white transition-colors ${
-                  tradingStatus === 'running'
-                    ? demoAccount && !effectiveDemoEditable
-                      ? 'bg-gray-400 cursor-not-allowed' 
-                      : 'bg-red-500 hover:bg-red-600'
-                    : 'bg-green-500 hover:bg-green-600'
+                  demoAccount && !effectiveDemoEditable
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : tradingStatus === 'running'
+                      ? 'bg-red-500 hover:bg-red-600'
+                      : 'bg-green-500 hover:bg-green-600'
                 }`}
               >
                 {tradingStatus === 'running' ? 'Stop' : 'Start'}
@@ -268,9 +268,9 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
             <div className="text-xs md:text-sm text-gray-500 mt-2">
               {tradingMode === 'paper' ? 'Paper Trading' : 'Live Trading'}
             </div>
-            {demoAccount && !effectiveDemoEditable && tradingStatus === 'running' && (
+            {demoAccount && !effectiveDemoEditable && (
               <div className="text-xs text-gray-400 mt-1">
-                Demo account - Stop button disabled
+                Demo account locked — Start/Stop disabled
               </div>
             )}
           </CardContent>
