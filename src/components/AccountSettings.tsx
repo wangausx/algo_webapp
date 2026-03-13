@@ -29,13 +29,17 @@ interface AccountSettingsProps {
   setAccountConfig: React.Dispatch<React.SetStateAction<AccountConfig>>;
   isDemoAccountSelected: boolean;
   setIsDemoAccountSelected: (isSelected: boolean) => void;
+  effectiveDemoEditable: boolean;
+  onDemoAccountSaved?: () => void;
 }
 
 const AccountSettings: React.FC<AccountSettingsProps> = ({
   accountConfig,
   setAccountConfig,
   isDemoAccountSelected,
-  setIsDemoAccountSelected
+  setIsDemoAccountSelected,
+  effectiveDemoEditable,
+  onDemoAccountSaved
 }) => {
   /*
    * Account Logic Flow:
@@ -60,6 +64,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
     loadAccountSettings,
     usernameValidation
   } = useAccountSettings(accountConfig.username, user?.isAuthenticated);
+
+  const isDemoRestricted = (currentAccountConfig.demoAccount || isDemoAccountSelected) && !effectiveDemoEditable;
 
   // Load demo account data when demo account is selected
   React.useEffect(() => {
@@ -169,8 +175,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
 
   // Handle reset - clear stored data and reset form
   const handleReset = () => {
-    // Don't allow reset if demo account is selected
-    if (isDemoAccountSelected) {
+    if (isDemoRestricted) {
       alert('Reset is not available for demo accounts. Demo account settings are preserved for system use.');
       return;
     }
@@ -190,7 +195,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       
       // Set demo account config
       const demoConfig: AccountConfig = {
-        username: 'wangausx',
+        username: 'dr_wang',
         apiKey: '',
         secretKey: '',
         brokerageType: 'paper' as const,
@@ -212,7 +217,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
 
   // Handle form submission with demo account restriction
   const handleSubmit = async (e: React.FormEvent) => {
-    if (currentAccountConfig.demoAccount) {
+    if (isDemoRestricted) {
       e.preventDefault();
       setShowRestrictionPopup(true);
       return;
@@ -232,6 +237,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       // This will create a new account if it doesn't exist, or update existing account
       const success = await saveAccountSettings(e);
       if (success) {
+        if (currentAccountConfig.demoAccount && onDemoAccountSaved) {
+          onDemoAccountSaved();
+        }
         // After successful save, reload the data from backend to confirm persistence
         if (currentAccountConfig.username && !isDemoAccountSelected) {
           console.log('Reloading account data after save to confirm persistence...');
@@ -245,10 +253,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
 
   // Handle input changes with demo account restriction
   const handleInputChange = (field: keyof AccountConfig, value: any) => {
-    // Check both local state and prop to ensure proper demo account detection
-    const isDemoAccount = currentAccountConfig.demoAccount || isDemoAccountSelected;
-    
-    if (isDemoAccount) {
+    if (isDemoRestricted) {
       setShowRestrictionPopup(true);
       return;
     }
@@ -322,8 +327,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                 <span className="text-sm font-medium">Demo Account Active</span>
               </div>
               <p className="text-xs text-yellow-700 mt-1">
-                This is a demo account. Changes are not allowed, and demo account settings are preserved for system use. 
-                You can switch back to a personal account at any time.
+                {effectiveDemoEditable
+                  ? 'This is a demo account. Editing is enabled until you save; then it will be locked again. You can switch to a personal account at any time.'
+                  : 'This is a demo account. Changes are not allowed, and demo account settings are preserved for system use. You can switch back to a personal account at any time.'}
               </p>
             </div>
           )}
@@ -357,7 +363,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                     onChange={() => handleDemoAccountSelectionChange(true)}
                     className="w-4 h-4 text-blue-600"
                   />
-                  <span className="text-sm" title="Click to switch back to personal account">Demo Account (wangausx)</span>
+                  <span className="text-sm" title="Click to switch back to personal account">Demo Account (dr_wang)</span>
                 </label>
               </div>
             </div>
@@ -369,7 +375,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                 value={currentAccountConfig.username}
                 onChange={(e) => handleInputChange('username', e.target.value)}
                 className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                  currentAccountConfig.demoAccount || !isDemoAccountSelected ? 'bg-gray-100 cursor-not-allowed' : ''
+                  isDemoRestricted || !isDemoAccountSelected ? 'bg-gray-100 cursor-not-allowed' : ''
                 } ${
                   !isDemoAccountSelected && currentAccountConfig.username && usernameValidation.isValid
                     ? usernameValidation.exists 
@@ -379,8 +385,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                       ? 'border-red-500 bg-red-50'
                       : ''
                 }`}
-                disabled={currentAccountConfig.demoAccount || !isDemoAccountSelected}
-                placeholder={isDemoAccountSelected ? 'wangausx (Demo Account)' : user?.username || 'Authenticated User'}
+                disabled={isDemoRestricted || !isDemoAccountSelected}
+                placeholder={isDemoAccountSelected ? 'dr_wang (Demo Account)' : user?.username || 'Authenticated User'}
               />
               
               {/* Username validation feedback */}
@@ -406,9 +412,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                 value={currentAccountConfig.apiKey}
                 onChange={(e) => handleInputChange('apiKey', e.target.value)}
                 className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                  currentAccountConfig.demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                  isDemoRestricted ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
-                disabled={currentAccountConfig.demoAccount}
+                disabled={isDemoRestricted}
                 placeholder={isDemoAccountSelected ? 'Demo account - not required' : 'Enter your API key'}
               />
             </div>
@@ -419,9 +425,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                 value={currentAccountConfig.secretKey}
                 onChange={(e) => handleInputChange('secretKey', e.target.value)}
                 className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                  currentAccountConfig.demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                  isDemoRestricted ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
-                disabled={currentAccountConfig.demoAccount}
+                disabled={isDemoRestricted}
                 placeholder={isDemoAccountSelected ? 'Demo account - not required' : 'Enter your secret key'}
               />
             </div>
@@ -432,9 +438,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                 value={currentAccountConfig.balance === 0 ? '' : currentAccountConfig.balance}
                 onChange={(e) => handleInputChange('balance', parseFloat(e.target.value) || 0)}
                 className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                  currentAccountConfig.demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                  isDemoRestricted ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
-                disabled={currentAccountConfig.demoAccount}
+                disabled={isDemoRestricted}
                 placeholder={isDemoAccountSelected ? 'Demo account - not required' : 'Will be retrieved from Alpaca platform'}
               />
             </div>
@@ -444,9 +450,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                 value={currentAccountConfig.brokerageType}
                 onChange={(e) => handleInputChange('brokerageType', e.target.value)}
                 className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                  currentAccountConfig.demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                  isDemoRestricted ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
-                disabled={currentAccountConfig.demoAccount}
+                disabled={isDemoRestricted}
               >
                 <option value="paper">Paper Trading</option>
                 <option value="live">Live Trading</option>
@@ -458,9 +464,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                 value={currentAccountConfig.modelType}
                 onChange={(e) => handleInputChange('modelType', e.target.value)}
                 className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                  currentAccountConfig.demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                  isDemoRestricted ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
-                disabled={currentAccountConfig.demoAccount}
+                disabled={isDemoRestricted}
               >
                 <option value="intraday_reversal">Intraday Reversal</option>
                 <option value="trend_following">Trend Following</option>
@@ -470,15 +476,15 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
             <button
               type="submit"
               className={`md:col-span-2 w-full px-4 py-2 text-sm md:text-base rounded-lg text-white transition-colors ${
-                currentAccountConfig.demoAccount 
+                isDemoRestricted 
                   ? 'bg-gray-400 cursor-not-allowed' 
                   : isLoading
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-blue-500 hover:bg-blue-600'
               }`}
-              disabled={currentAccountConfig.demoAccount || isLoading}
+              disabled={isDemoRestricted || isLoading}
             >
-              {currentAccountConfig.demoAccount 
+              {isDemoRestricted 
                 ? 'Changes Not Allowed (Demo Account)' 
                 : isLoading 
                   ? 'Loading...' 
@@ -487,15 +493,15 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
             <button
               type="button"
               onClick={handleReset}
-              disabled={isDemoAccountSelected}
+              disabled={isDemoRestricted}
               className={`md:col-span-2 w-full px-4 py-2 text-sm md:text-base rounded-lg text-white transition-colors ${
-                isDemoAccountSelected
+                isDemoRestricted
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-red-500 hover:bg-red-600'
               }`}
-              title={isDemoAccountSelected ? 'Reset not available for demo accounts' : 'Clear all stored user data'}
+              title={isDemoRestricted ? 'Reset not available for demo accounts' : 'Clear all stored user data'}
             >
-              {isDemoAccountSelected ? 'Reset Not Available (Demo Account)' : 'Reset Personal Data'}
+              {isDemoRestricted ? 'Reset Not Available (Demo Account)' : 'Reset Personal Data'}
             </button>
           </form>
           )}

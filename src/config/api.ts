@@ -4,6 +4,10 @@ interface ApiConfig {
   wsUrl: string;
 }
 
+/** When true, demo account can be edited (save/reset) and trade settings changed. Set via REACT_APP_DEMO_ACCOUNT_EDITABLE=true */
+const raw = process.env.REACT_APP_DEMO_ACCOUNT_EDITABLE;
+export const isDemoAccountEditable = raw === 'true' || raw === '1';
+
 // Environment detection
 const isDevelopment = process.env.NODE_ENV === 'development';
 const isDocker = process.env.REACT_APP_DOCKER === 'true';
@@ -175,6 +179,8 @@ if (process.env.NODE_ENV === 'development') {
     isDocker,
     isProduction,
     isLocalhost,
+    isDemoAccountEditable,
+    REACT_APP_DEMO_ACCOUNT_EDITABLE_raw: process.env.REACT_APP_DEMO_ACCOUNT_EDITABLE,
     nodeEnv: process.env.NODE_ENV,
     reactAppDocker: process.env.REACT_APP_DOCKER,
     reactAppApiUrl: process.env.REACT_APP_API_URL,

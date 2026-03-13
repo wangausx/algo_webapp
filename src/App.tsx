@@ -16,8 +16,9 @@ import {
   saveUsername, 
   loadDemoAccountSelection, 
   saveDemoAccountSelection,
-  saveAccountConfig 
+  saveAccountConfig
 } from './utils/storage';
+import { isDemoAccountEditable, buildApiUrl } from './config/api';
 
 // Main authenticated app component
 const AuthenticatedApp: React.FC = () => {
@@ -25,7 +26,46 @@ const AuthenticatedApp: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isDemoAccountSelected, setIsDemoAccountSelected] = useState(false);
   const [isLoadingSavedData, setIsLoadingSavedData] = useState(true);
+  const [demoEditLocked, setDemoEditLocked] = useState(false);
   const { user, logout } = useAuth();
+  const effectiveDemoEditable = isDemoAccountEditable && !demoEditLocked;
+
+  // Fetch demo edit lock from server (source of truth; shared across all browsers)
+  const fetchDemoEditLock = useCallback(() => {
+    fetch(buildApiUrl('/router/demo-edit-locked'), { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : { demoEditLocked: false }))
+      .then((data) => {
+        if (data && typeof data.demoEditLocked === 'boolean') {
+          setDemoEditLocked(data.demoEditLocked);
+        }
+      })
+      .catch(() => setDemoEditLocked(false));
+  }, []);
+
+  useEffect(() => {
+    if (!isDemoAccountSelected) return;
+    let cancelled = false;
+    fetch(buildApiUrl('/router/demo-edit-locked'), { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : { demoEditLocked: false }))
+      .then((data) => {
+        if (!cancelled && data && typeof data.demoEditLocked === 'boolean') {
+          setDemoEditLocked(data.demoEditLocked);
+        }
+      })
+      .catch(() => { if (!cancelled) setDemoEditLocked(false); });
+    return () => { cancelled = true; };
+  }, [isDemoAccountSelected]);
+
+  // Refetch demo lock when tab becomes visible (e.g. after a new deploy that restarted backend)
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && isDemoAccountSelected) {
+        fetchDemoEditLock();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [isDemoAccountSelected, fetchDemoEditLock]);
 
   const [accountConfig, setAccountConfig] = useState<AccountConfig>({
     username: user?.username || '',
@@ -47,20 +87,20 @@ const AuthenticatedApp: React.FC = () => {
       // Authenticated user - use their username
       setAccountConfig(prev => ({ ...prev, username: user.username }));
       setIsDemoAccountSelected(false); // Personal account
-    } else if (savedUsername && savedUsername !== 'wangausx') {
+    } else if (savedUsername && savedUsername !== 'dr_wang') {
       // Returning user with saved personal account but no authentication
       // This means they need to re-authenticate
       console.log('Found saved personal account without authentication, switching to demo account');
       setIsDemoAccountSelected(true);
-      setAccountConfig(prev => ({ ...prev, username: 'wangausx', demoAccount: true }));
-    } else if (savedUsername === 'wangausx' || savedDemoSelection) {
+      setAccountConfig(prev => ({ ...prev, username: 'dr_wang', demoAccount: true }));
+    } else if (savedUsername === 'dr_wang' || savedDemoSelection) {
       // Demo account user
       setIsDemoAccountSelected(true);
-      setAccountConfig(prev => ({ ...prev, username: 'wangausx', demoAccount: true }));
+      setAccountConfig(prev => ({ ...prev, username: 'dr_wang', demoAccount: true }));
     } else {
       // First-time user - default to demo account
       setIsDemoAccountSelected(true);
-      setAccountConfig(prev => ({ ...prev, username: 'wangausx', demoAccount: true }));
+      setAccountConfig(prev => ({ ...prev, username: 'dr_wang', demoAccount: true }));
     }
     
     // Mark loading as complete
@@ -79,10 +119,10 @@ const AuthenticatedApp: React.FC = () => {
     saveDemoAccountSelection(isDemoAccountSelected);
   }, [isDemoAccountSelected]);
 
-  // Auto-set demo account selection when username is 'wangausx' (only on initial load)
+  // Auto-set demo account selection when username is 'dr_wang' (only on initial load)
   useEffect(() => {
     // Only auto-set demo account if we haven't loaded saved data yet
-    if (!isLoadingSavedData && accountConfig.username === 'wangausx' && !isDemoAccountSelected) {
+    if (!isLoadingSavedData && accountConfig.username === 'dr_wang' && !isDemoAccountSelected) {
       setIsDemoAccountSelected(true);
     }
   }, [accountConfig.username, isDemoAccountSelected, isLoadingSavedData]);
@@ -114,10 +154,10 @@ const AuthenticatedApp: React.FC = () => {
     setIsDemoAccountSelected(isSelected);
     
     if (isSelected) {
-      // Switching to demo account - set username to wangausx and load demo data
+      // Switching to demo account - set username to dr_wang and load demo data
       setAccountConfig(prev => ({
         ...prev,
-        username: 'wangausx',
+        username: 'dr_wang',
         demoAccount: true
       }));
     } else {
@@ -225,7 +265,7 @@ const AuthenticatedApp: React.FC = () => {
 
   // Load demo account data when demo account is selected
   useEffect(() => {
-    if (accountConfig.demoAccount && accountConfig.username === 'wangausx') {
+    if (accountConfig.demoAccount && accountConfig.username === 'dr_wang') {
       // Demo account is selected, ensure all required data is loaded
       console.log('Demo account selected, ensuring all data is loaded');
       // The individual components will handle loading their respective demo data
@@ -306,6 +346,7 @@ const AuthenticatedApp: React.FC = () => {
       <div className="flex-1 p-4 md:p-8 overflow-auto">
         {activeTab === 'dashboard' && (
           <Dashboard
+            effectiveDemoEditable={effectiveDemoEditable}
             tradingStatus={tradingStatus}
             toggleTrading={toggleTrading}
             username={accountConfig.username}
@@ -331,6 +372,8 @@ const AuthenticatedApp: React.FC = () => {
             setAccountConfig={setAccountConfig}
             isDemoAccountSelected={isDemoAccountSelected}
             setIsDemoAccountSelected={handleDemoAccountSelectionChange}
+            effectiveDemoEditable={effectiveDemoEditable}
+            onDemoAccountSaved={() => setDemoEditLocked(true)}
           />
         )}
 
@@ -338,6 +381,7 @@ const AuthenticatedApp: React.FC = () => {
           <TradeSettings
             username={validatedUsername}
             demoAccount={accountConfig.demoAccount}
+            effectiveDemoEditable={effectiveDemoEditable}
           />
         )}
       </div>

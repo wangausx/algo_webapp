@@ -106,7 +106,7 @@ export const useTradeSettings = (username: string) => {
     setIsLoading(true);
     try {
       // Load demo trade settings
-      const response = await fetch(buildApiUrl('/api/tradesetting/wangausx'));
+      const response = await fetch(buildApiUrl('/api/tradesetting/dr_wang'));
       if (response.ok) {
         const data = await response.json();
         console.log('Loaded demo trade settings data:', data);
@@ -115,7 +115,7 @@ export const useTradeSettings = (username: string) => {
         console.warn('Failed to fetch demo trade settings, using defaults');
         // Set default demo trade settings if API fails
         setTradeSetting({
-          user_id: 'wangausx',
+          user_id: 'dr_wang',
           subscribedSymbols: [
             { symbol: 'AAPL', isOption: 'no' },
             { symbol: 'GOOGL', isOption: 'no' },
@@ -132,7 +132,7 @@ export const useTradeSettings = (username: string) => {
       console.error('Error loading demo trade settings:', error);
       // Set default demo trade settings if API fails
       setTradeSetting({
-        user_id: 'wangausx',
+        user_id: 'dr_wang',
         subscribedSymbols: [
           { symbol: 'AAPL', isOption: 'no' },
           { symbol: 'GOOGL', isOption: 'no' },

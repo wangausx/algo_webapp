@@ -49,6 +49,7 @@ interface DashboardProps {
   fetchOrders: () => Promise<void>;
   tradingMode?: 'paper' | 'live';
   demoAccount?: boolean;
+  effectiveDemoEditable?: boolean;
   isLoadingSavedData?: boolean; // Add this prop to track if app is still loading saved data
   usernameValidation?: {
     isValid: boolean;
@@ -74,6 +75,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
   fetchOrders,
   tradingMode = 'paper',
   demoAccount = false,
+  effectiveDemoEditable = false,
   isLoadingSavedData = false,
   usernameValidation = {
     isValid: false,
@@ -102,8 +104,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
   );
 
   const handleStopTrading = () => {
-    // Prevent demo account users from stopping trading
-    if (demoAccount) {
+    if (demoAccount && !effectiveDemoEditable) {
       return;
     }
     
@@ -252,10 +253,10 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
               </span>
               <button
                 onClick={tradingStatus === 'running' ? handleStopTrading : toggleTrading}
-                disabled={demoAccount && tradingStatus === 'running'}
+                disabled={demoAccount && !effectiveDemoEditable && tradingStatus === 'running'}
                 className={`px-3 py-2 md:px-4 md:py-2 text-sm rounded-lg text-white transition-colors ${
                   tradingStatus === 'running'
-                    ? demoAccount 
+                    ? demoAccount && !effectiveDemoEditable
                       ? 'bg-gray-400 cursor-not-allowed' 
                       : 'bg-red-500 hover:bg-red-600'
                     : 'bg-green-500 hover:bg-green-600'
@@ -267,7 +268,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
             <div className="text-xs md:text-sm text-gray-500 mt-2">
               {tradingMode === 'paper' ? 'Paper Trading' : 'Live Trading'}
             </div>
-            {demoAccount && tradingStatus === 'running' && (
+            {demoAccount && !effectiveDemoEditable && tradingStatus === 'running' && (
               <div className="text-xs text-gray-400 mt-1">
                 Demo account - Stop button disabled
               </div>

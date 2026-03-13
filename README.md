@@ -135,6 +135,13 @@ environment:
   - REACT_APP_DOCKER=true
 ```
 
+#### Optional: Demo account editing
+Set `REACT_APP_DEMO_ACCOUNT_EDITABLE=true` to allow editing and reset for the demo account. When unset or `false`, the demo account is read-only.
+
+- **Local (algo_webapp):** set in `algo_webapp/.env` and restart the dev server.
+- **Local docker-compose (backend):** set in `backend/.env` (or shell) when using `backend/docker-compose.rl-tradingpredict.yml`; the frontend service passes it through.
+- **Fly.io (deploy-single-app-rl-dev.sh):** set in `backend/.env` or env **before** running the deploy script; it is passed as a **build-arg** (baked into the image). **`fly secret set` does not work** for this variable—it is build-time, not runtime; redeploy with the var set to change it.
+
 ## 🛠️ Migration from Docker Desktop
 
 If you're migrating from Docker Desktop:

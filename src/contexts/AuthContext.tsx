@@ -6,6 +6,19 @@ interface User {
   isAuthenticated: boolean;
 }
 
+/** Auth API success payload (login/register). */
+interface AuthSuccessPayload {
+  success: true;
+  user: { username: string };
+  token: string;
+}
+
+/** Verify session API response. */
+interface VerifySessionPayload {
+  valid: boolean;
+  user?: { username: string };
+}
+
 interface AuthContextType {
   user: User | null;
   login: (username: string, password: string) => Promise<boolean>;
@@ -27,6 +40,18 @@ const AUTH_STORAGE_KEYS = {
   USER: 'algoTrading_authenticatedUser',
   SESSION_TOKEN: 'algoTrading_sessionToken',
 } as const;
+
+/** Safely parse response body as JSON; returns parsed data or null with raw text when not JSON (e.g. server error page). */
+async function parseJsonResponse(response: Response): Promise<{ data: Record<string, unknown> | null; text: string }> {
+  const text = await response.text();
+  if (!text.trim()) return { data: null, text: '' };
+  try {
+    const data = JSON.parse(text) as Record<string, unknown>;
+    return { data, text };
+  } catch {
+    return { data: null, text };
+  }
+}
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -52,8 +77,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           });
 
           if (response.ok) {
-            const data = await response.json();
-            if (data.valid) {
+            const data = (await response.json()) as VerifySessionPayload;
+            if (data.valid && data.user?.username) {
               // Token is valid, restore user session
               setUser({
                 username: data.user.username,
@@ -103,11 +128,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await response.json();
-      
-      if (response.ok && data.success) {
+      const { data, text } = await parseJsonResponse(response);
+
+      if (response.ok && data?.success) {
+        const authData = data as unknown as AuthSuccessPayload;
         const userData: User = {
-          username: data.user.username,
+          username: authData.user.username,
           isAuthenticated: true,
         };
 
@@ -115,19 +141,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Store session data with JWT token
         localStorage.setItem(AUTH_STORAGE_KEYS.USER, JSON.stringify(userData));
-        localStorage.setItem(AUTH_STORAGE_KEYS.SESSION_TOKEN, data.token);
+        localStorage.setItem(AUTH_STORAGE_KEYS.SESSION_TOKEN, authData.token);
         
         return true;
       } else {
+        // Server returned non-JSON (e.g. 500 error page)
+        if (!data) {
+          setError(text?.trim() || `Server error (${response.status}). Please try again later.`);
+          return false;
+        }
         // Handle different error codes
         if (data.code === 'INVALID_CREDENTIALS') {
           setError('Invalid username or password. Please try again.');
         } else if (data.code === 'INVALID_USERNAME') {
-          setError(data.error || 'Invalid username format.');
+          setError((data.error as string) || 'Invalid username format.');
         } else if (data.code === 'INVALID_PASSWORD') {
-          setError(data.error || 'Invalid password format.');
+          setError((data.error as string) || 'Invalid password format.');
         } else {
-          setError(data.error || 'Login failed. Please try again.');
+          setError((data.error as string) || 'Login failed. Please try again.');
         }
         return false;
       }
@@ -172,13 +203,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       // First check if username is available
       const checkResponse = await fetch(buildApiUrl(`/api/auth/check-username/${username}`));
-      
-      if (checkResponse.ok) {
-        const checkData = await checkResponse.json();
-        if (!checkData.canRegister) {
-          setError('Username already exists. Please choose a different username or try logging in.');
-          return false;
-        }
+      const { data: checkData } = await parseJsonResponse(checkResponse);
+
+      if (checkResponse.ok && checkData && !checkData.canRegister) {
+        setError('Username already exists. Please choose a different username or try logging in.');
+        return false;
       }
 
       // Create account with placeholder API credentials if not provided
@@ -197,11 +226,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         body: JSON.stringify(registrationData),
       });
 
-      const data = await response.json();
-      
-      if (response.ok && data.success) {
+      const { data, text } = await parseJsonResponse(response);
+
+      if (response.ok && data?.success) {
+        const authData = data as unknown as AuthSuccessPayload;
         const userData: User = {
-          username: data.user.username,
+          username: authData.user.username,
           isAuthenticated: true,
         };
 
@@ -209,21 +239,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Store session data with JWT token
         localStorage.setItem(AUTH_STORAGE_KEYS.USER, JSON.stringify(userData));
-        localStorage.setItem(AUTH_STORAGE_KEYS.SESSION_TOKEN, data.token);
+        localStorage.setItem(AUTH_STORAGE_KEYS.SESSION_TOKEN, authData.token);
         
         return true;
       } else {
+        // Server returned non-JSON (e.g. 500 with "Something broke!")
+        if (!data) {
+          setError(text?.trim() || `Server error (${response.status}). Please try again later.`);
+          return false;
+        }
         // Handle different error codes
         if (data.code === 'USERNAME_EXISTS') {
           setError('Username already exists. Please choose a different username or try logging in.');
         } else if (data.code === 'INVALID_USERNAME') {
-          setError(data.error || 'Invalid username format.');
+          setError((data.error as string) || 'Invalid username format.');
         } else if (data.code === 'INVALID_PASSWORD') {
-          setError(data.error || 'Invalid password format.');
+          setError((data.error as string) || 'Invalid password format.');
         } else if (data.code === 'MISSING_REQUIRED_FIELDS') {
-          setError(data.error || 'All required fields must be provided.');
+          setError((data.error as string) || 'All required fields must be provided.');
         } else {
-          setError(data.error || 'Registration failed. Please try again.');
+          setError((data.error as string) || 'Registration failed. Please try again.');
         }
         return false;
       }

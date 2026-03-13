@@ -33,12 +33,14 @@ interface SymbolConfig {
 interface TradeSettingsProps {
   username: string;
   demoAccount?: boolean;
+  effectiveDemoEditable?: boolean;
 }
 
 // Predefined list of stock symbols
 const STOCK_SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA', 'NVDA', 'META', 'JPM', 'V', 'WMT'];
 
-const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = false }) => {
+const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = false, effectiveDemoEditable = false }) => {
+  const isDemoRestricted = demoAccount && !effectiveDemoEditable;
   const [showRestrictionPopup, setShowRestrictionPopup] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [selectedSymbol, setSelectedSymbol] = React.useState("");
@@ -72,7 +74,7 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
 
   // Handle saving trade settings with demo account restriction
   const handleSaveTradeSettings = () => {
-    if (demoAccount) {
+    if (isDemoRestricted) {
       setShowRestrictionPopup(true);
       return;
     }
@@ -88,7 +90,7 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
 
   // Handle adding a new symbol with demo account restriction
   const handleAddSymbol = () => {
-    if (demoAccount) {
+    if (isDemoRestricted) {
       setShowRestrictionPopup(true);
       return;
     }
@@ -119,7 +121,7 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
 
   // Handle removing a symbol with demo account restriction
   const handleRemoveSymbol = (symbolToRemove: string) => {
-    if (demoAccount) {
+    if (isDemoRestricted) {
       setShowRestrictionPopup(true);
       return;
     }
@@ -128,7 +130,7 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
 
   // Handle form changes with demo account restriction
   const handleFormChange = (callback: () => void) => {
-    if (demoAccount) {
+    if (isDemoRestricted) {
       setShowRestrictionPopup(true);
       return;
     }
@@ -160,7 +162,7 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
         <CardHeader className="p-3 md:p-4">
           <CardTitle className="text-sm md:text-base">Trade Settings</CardTitle>
           <CardDescription className="text-xs md:text-sm">Configure your trading preferences and risk settings</CardDescription>
-          {demoAccount && (
+          {isDemoRestricted && (
             <div className="flex items-center gap-2 mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
               <AlertTriangle className="w-4 h-4 text-yellow-600" />
               <span className="text-xs text-yellow-800">Demo account - changes are restricted</span>
@@ -181,11 +183,11 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
                   <button
                     onClick={() => handleFormChange(() => setShowSymbolForm(true))}
                     className={`px-2 py-1 text-sm rounded hover:transition-colors ${
-                      demoAccount 
+                      isDemoRestricted 
                         ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
                         : 'bg-green-500 text-white hover:bg-green-600'
                     }`}
-                    disabled={demoAccount}
+                    disabled={isDemoRestricted}
                   >
                     Add Symbol
                   </button>
@@ -200,9 +202,9 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
                         value={selectedSymbol}
                         onChange={(e) => setSelectedSymbol(e.target.value)}
                         className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                          demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                          isDemoRestricted ? 'bg-gray-100 cursor-not-allowed' : ''
                         }`}
-                        disabled={demoAccount}
+                        disabled={isDemoRestricted}
                       >
                         <option value="" disabled>Select a symbol</option>
                         {STOCK_SYMBOLS.filter(symbol =>
@@ -219,9 +221,9 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
                         value={isOptionSelected}
                         onChange={(e) => setIsOptionSelected(e.target.value as 'yes' | 'no')}
                         className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                          demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                          isDemoRestricted ? 'bg-gray-100 cursor-not-allowed' : ''
                         }`}
-                        disabled={demoAccount}
+                        disabled={isDemoRestricted}
                       >
                         <option value="no">Stock</option>
                         <option value="yes">Option</option>
@@ -236,9 +238,9 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
                             value={optionType}
                             onChange={(e) => setOptionType(e.target.value as 'call' | 'put')}
                             className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                              demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                              isDemoRestricted ? 'bg-gray-100 cursor-not-allowed' : ''
                             }`}
-                            disabled={demoAccount}
+                            disabled={isDemoRestricted}
                           >
                             <option value="call">Call</option>
                             <option value="put">Put</option>
@@ -252,11 +254,11 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
                             value={optionStrike === 0 ? "" : optionStrike}
                             onChange={(e) => setOptionStrike(parseFloat(e.target.value) || 0)}
                             className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                              demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                              isDemoRestricted ? 'bg-gray-100 cursor-not-allowed' : ''
                             }`}
                             step="0.01"
                             min="0"
-                            disabled={demoAccount}
+                            disabled={isDemoRestricted}
                           />
                         </div>
 
@@ -267,9 +269,9 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
                             value={optionExpiration}
                             onChange={(e) => setOptionExpiration(e.target.value)}
                             className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                              demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                              isDemoRestricted ? 'bg-gray-100 cursor-not-allowed' : ''
                             }`}
-                            disabled={demoAccount}
+                            disabled={isDemoRestricted}
                           />
                         </div>
                       </div>
@@ -278,9 +280,9 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
                     <div className="flex gap-2">
                       <button
                         onClick={handleAddSymbol}
-                        disabled={!selectedSymbol || demoAccount}
+                        disabled={!selectedSymbol || isDemoRestricted}
                         className={`px-4 py-2 rounded hover:transition-colors ${
-                          demoAccount || !selectedSymbol
+                          isDemoRestricted || !selectedSymbol
                             ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             : 'bg-blue-500 text-white hover:bg-blue-600'
                         }`}
@@ -306,11 +308,11 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
                       <button
                         onClick={() => handleRemoveSymbol(symbolConfig.symbol)}
                         className={`px-2 py-1 rounded hover:transition-colors ${
-                          demoAccount 
+                          isDemoRestricted 
                             ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
                             : 'bg-red-500 text-white hover:bg-red-600'
                         }`}
-                        disabled={demoAccount}
+                        disabled={isDemoRestricted}
                       >
                         Remove
                       </button>
@@ -333,9 +335,9 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
                         riskSettings: { ...prev.riskSettings, max_leverage: parseInt(e.target.value, 10) || 3 },
                       })))}
                       className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                        demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                        isDemoRestricted ? 'bg-gray-100 cursor-not-allowed' : ''
                       }`}
-                      disabled={demoAccount}
+                      disabled={isDemoRestricted}
                     >
                       <option value="2">2x</option>
                       <option value="3">3x</option>
@@ -375,13 +377,13 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
                       }
                     }}
                     className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                      demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                      isDemoRestricted ? 'bg-gray-100 cursor-not-allowed' : ''
                     }`}
                     min="0"
                     max="100"
                     step="0.1"
                     placeholder="Enter risk percentage"
-                    disabled={demoAccount}
+                    disabled={isDemoRestricted}
                   />
                 </div>
 
@@ -396,10 +398,10 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
                       riskSettings: { ...prev.riskSettings, maxDailyLoss: parseFloat(e.target.value) || 0 },
                     })))}
                     className={`w-full p-2 text-sm md:text-base border rounded-lg ${
-                      demoAccount ? 'bg-gray-100 cursor-not-allowed' : ''
+                      isDemoRestricted ? 'bg-gray-100 cursor-not-allowed' : ''
                     }`}
                     min="0"
-                    disabled={demoAccount}
+                    disabled={isDemoRestricted}
                   />
                 </div>
               </div>
@@ -408,13 +410,13 @@ const TradeSettings: React.FC<TradeSettingsProps> = ({ username, demoAccount = f
             <button
               onClick={handleSaveTradeSettings}
               className={`w-full px-4 py-2 text-sm md:text-base rounded-lg text-white transition-colors ${
-                demoAccount 
+                isDemoRestricted 
                   ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-blue-500 hover:bg-blue-600'
               }`}
-              disabled={demoAccount}
+              disabled={isDemoRestricted}
             >
-              {demoAccount ? 'Changes Not Allowed (Demo Account)' : 'Save Trade Settings'}
+              {isDemoRestricted ? 'Changes Not Allowed (Demo Account)' : 'Save Trade Settings'}
             </button>
           </div>
         </CardContent>

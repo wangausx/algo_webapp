@@ -102,11 +102,11 @@ CREATE TRIGGER update_trade_settings_updated_at BEFORE UPDATE ON trade_settings
 
 -- Insert default user if not exists
 INSERT INTO users (username, api_key, secret_key, brokerage_type, model_type, risk_level, balance)
-VALUES ('wangausx', '', '', 'paper', 'intraday_reversal', 'moderate', 10000.00)
+VALUES ('dr_wang', '', '', 'paper', 'intraday_reversal', 'moderate', 10000.00)
 ON CONFLICT (username) DO NOTHING;
 
 -- Insert default trade settings
 INSERT INTO trade_settings (user_id, trading_status, subscribed_symbols, risk_settings)
 SELECT id, 'stopped', '[]', '{"max_leverage": 3, "riskPercentage": 1, "maxDailyLoss": 1500}'
-FROM users WHERE username = 'wangausx'
+FROM users WHERE username = 'dr_wang'
 ON CONFLICT (user_id) DO NOTHING; 

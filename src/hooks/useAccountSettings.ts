@@ -17,7 +17,7 @@ export const useAccountSettings = (username: string, isAuthenticated?: boolean) 
       modelType: 'intraday_reversal',
       riskLevel: 'moderate',
       balance: 0,
-      demoAccount: initialUsername === 'wangausx'
+      demoAccount: initialUsername === 'dr_wang'
     };
   });
   
@@ -46,7 +46,7 @@ export const useAccountSettings = (username: string, isAuthenticated?: boolean) 
     console.log('validateUsername called with:', usernameToValidate);
 
     // Short-circuit validation for demo user
-    if (usernameToValidate === 'wangausx') {
+    if (usernameToValidate === 'dr_wang') {
       setUsernameValidation({
         isValid: true,
         isChecking: false,
@@ -209,7 +209,7 @@ export const useAccountSettings = (username: string, isAuthenticated?: boolean) 
     
     if (effectiveUsername) {
       // Bypass validation completely for demo account
-      if (effectiveUsername === 'wangausx') {
+      if (effectiveUsername === 'dr_wang') {
         setUsernameValidation({
           isValid: true,
           isChecking: false,
@@ -309,7 +309,7 @@ export const useAccountSettings = (username: string, isAuthenticated?: boolean) 
     setIsLoading(true);
     try {
       // Load demo account settings
-      const response = await fetch(buildApiUrl('/router/account/wangausx'));
+      const response = await fetch(buildApiUrl('/router/account/dr_wang'));
       if (response.ok) {
         const data = await response.json();
         console.log('Loaded demo account data:', data);
@@ -317,7 +317,7 @@ export const useAccountSettings = (username: string, isAuthenticated?: boolean) 
           setAccountConfig(prev => ({ 
             ...prev, 
             ...data,
-            username: 'wangausx',
+            username: 'dr_wang',
             demoAccount: true
           }));
         }
@@ -326,7 +326,7 @@ export const useAccountSettings = (username: string, isAuthenticated?: boolean) 
         // Set default demo account values if API fails
         setAccountConfig(prev => ({
           ...prev,
-          username: 'wangausx',
+          username: 'dr_wang',
           apiKey: 'demo_api_key',
           secretKey: 'demo_secret_key',
           brokerageType: 'paper',
@@ -340,7 +340,7 @@ export const useAccountSettings = (username: string, isAuthenticated?: boolean) 
         // Set default demo account values if API fails
         setAccountConfig(prev => ({
           ...prev,
-          username: 'wangausx',
+          username: 'dr_wang',
           apiKey: 'demo_api_key',
           secretKey: 'demo_secret_key',
           brokerageType: 'paper',
@@ -355,7 +355,7 @@ export const useAccountSettings = (username: string, isAuthenticated?: boolean) 
       // Set default demo account values if API fails
       setAccountConfig(prev => ({
         ...prev,
-        username: 'wangausx',
+        username: 'dr_wang',
         apiKey: 'demo_api_key',
         secretKey: 'demo_secret_key',
         brokerageType: 'paper',

@@ -2,7 +2,7 @@
 const STORAGE_KEYS = {
   USERNAME: 'algoTrading_username',
   DEMO_ACCOUNT_SELECTED: 'algoTrading_demoAccountSelected',
-  ACCOUNT_CONFIG: 'algoTrading_accountConfig'
+  ACCOUNT_CONFIG: 'algoTrading_accountConfig',
 } as const;
 
 // Username persistence
