@@ -424,10 +424,17 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
                           <td colSpan={7} className="p-4 text-center text-gray-500">No closed positions</td>
                         </tr>
                       ) : (
-                        [...closedPositions]
-                          .sort((a, b) => (b.closedAt?.getTime() || 0) - (a.closedAt?.getTime() || 0))
-                          .map((position) => (
-                            <tr key={`${position.symbol}-${position.side}-${position.closedAt?.getTime() || 'unknown'}`} className="border-t">
+                        (() => {
+                          const sorted = [...closedPositions].sort((a, b) => (b.closedAt?.getTime() || 0) - (a.closedAt?.getTime() || 0));
+                          const seen = new Set<string>();
+                          const deduped = sorted.filter((p) => {
+                            const key = `${p.symbol}|${p.side}|${p.closedAt?.getTime() ?? 0}|${p.quantity}|${p.exitPrice}`;
+                            if (seen.has(key)) return false;
+                            seen.add(key);
+                            return true;
+                          });
+                          return deduped.map((position, index) => (
+                            <tr key={`${position.symbol}-${position.side}-${position.closedAt?.getTime() ?? index}-${index}`} className="border-t">
                               <td className="p-2">{position.symbol}</td>
                               <td className="p-2 capitalize">{position.side}</td>
                               <td className="p-2">{position.quantity}</td>
@@ -440,7 +447,8 @@ const Dashboard: React.FC<DashboardProps> = React.memo(({
                               </td>
                               <td className="p-2">{position.closedAt ? formatDateWithOptions(position.closedAt, 'short') : 'Unknown'}</td>
                             </tr>
-                          ))
+                          ));
+                        })()
                       )}
                     </tbody>
                   </table>

@@ -17,9 +17,10 @@ export const usePositions = (
   const lastClosedPositionsFetchRef = useRef<number>(0);
   const CLOSED_POSITIONS_FETCH_COOLDOWN = 2000; // 2 seconds minimum between fetches
 
-  // Throttle account refresh when triggered by position updates (avoids 30+ /router/account requests/min)
+  // Throttle account refresh when triggered by position updates (avoids burst of /router/account requests)
   const lastAccountRefreshFromPositionRef = useRef<number>(0);
   const ACCOUNT_REFRESH_COOLDOWN_MS = 20000; // 20s between account refreshes from position updates
+  const positionUpdateAppliedRef = useRef<boolean>(false); // set in setState updater; only refresh when true
 
   // Debug: Monitor closedPositions state changes
   useEffect(() => {
@@ -201,27 +202,25 @@ export const usePositions = (
   // }, [username, fetchClosedPositions]);
 
   const handlePositionUpdate = useCallback((positionUpdate: OpenPosition) => {
-    //console.log('handlePositionUpdate callback created');
-    //console.log('Dashboard received position update:', positionUpdate);
-    
+    positionUpdateAppliedRef.current = false;
+
     setPositions((prev) => {
-      //console.log('Previous positions state:', prev);
-      
       const existingPositionIndex = prev.findIndex(
         (p) => p.symbol === positionUpdate.symbol && p.side === positionUpdate.side
       );
 
       // Check for duplicate updates by comparing key fields
-      const isDuplicate = existingPositionIndex !== -1 && 
+      const isDuplicate = existingPositionIndex !== -1 &&
         prev[existingPositionIndex].quantity === positionUpdate.quantity &&
         prev[existingPositionIndex].entryPrice === positionUpdate.entryPrice &&
         prev[existingPositionIndex].currentPrice === positionUpdate.currentPrice &&
         prev[existingPositionIndex].unrealizedPl === positionUpdate.unrealizedPl;
 
       if (isDuplicate) {
-        console.log('Duplicate position update detected, skipping');
         return prev;
       }
+
+      positionUpdateAppliedRef.current = true;
 
       const newPosition = {
         symbol: positionUpdate.symbol,
@@ -231,14 +230,10 @@ export const usePositions = (
         currentPrice: positionUpdate.currentPrice != null ? Number(positionUpdate.currentPrice) : null,
         unrealizedPl: positionUpdate.unrealizedPl != null ? Number(positionUpdate.unrealizedPl) : 0,
       } as OpenPosition;
-      
-      console.log('Position update type:', existingPositionIndex === -1 ? 'New position' : 'Update existing position');
-      console.log('Position data:', newPosition);
-      
+
       let newPositions;
       if (existingPositionIndex === -1) {
         newPositions = [...prev, newPosition];
-        console.log('Adding new position to state');
       } else {
         newPositions = [...prev];
         newPositions[existingPositionIndex] = {
@@ -248,16 +243,17 @@ export const usePositions = (
           currentPrice: newPosition.currentPrice ?? newPositions[existingPositionIndex].currentPrice,
           unrealizedPl: newPosition.unrealizedPl ?? newPositions[existingPositionIndex].unrealizedPl,
         };
-        //console.log('Updating existing position in state');
       }
-      
-      //console.log('New positions state:', newPositions);
       return [...newPositions];
     });
 
-    // Refresh account data after position update (throttled to avoid high request volume)
+    // Only refresh account when we actually applied an update (skip duplicates to avoid burst of /router/account requests)
     const now = Date.now();
-    if (refreshAccountData && now - lastAccountRefreshFromPositionRef.current >= ACCOUNT_REFRESH_COOLDOWN_MS) {
+    if (
+      positionUpdateAppliedRef.current &&
+      refreshAccountData &&
+      now - lastAccountRefreshFromPositionRef.current >= ACCOUNT_REFRESH_COOLDOWN_MS
+    ) {
       lastAccountRefreshFromPositionRef.current = now;
       refreshAccountData();
     }
